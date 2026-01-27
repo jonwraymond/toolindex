@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/jonwraymond/toolmodel"
@@ -1342,5 +1343,135 @@ func TestProviderBackendReplacementByIdentity(t *testing.T) {
 
 	if len(backends) != 1 {
 		t.Errorf("expected 1 backend after replacement, got %d", len(backends))
+	}
+}
+
+// ============================================================
+// Tests for Search Doc Caching and Deterministic Order
+// ============================================================
+
+func TestSearchDocs_SortedByID(t *testing.T) {
+	var receivedDocs []SearchDoc
+	mockSearcher := &mockSearcher{
+		searchFunc: func(query string, limit int, docs []SearchDoc) ([]Summary, error) {
+			receivedDocs = docs
+			return nil, nil
+		},
+	}
+
+	idx := NewInMemoryIndex(IndexOptions{Searcher: mockSearcher})
+
+	// Register tools in non-alphabetical order
+	idx.RegisterTool(makeTestTool("zebra", "ns", "desc", nil), makeMCPBackend("s"))
+	idx.RegisterTool(makeTestTool("alpha", "ns", "desc", nil), makeMCPBackend("s"))
+	idx.RegisterTool(makeTestTool("middle", "ns", "desc", nil), makeMCPBackend("s"))
+
+	idx.Search("test", 10)
+
+	// Assert docs are sorted by ID ascending
+	if len(receivedDocs) != 3 {
+		t.Fatalf("expected 3 docs, got %d", len(receivedDocs))
+	}
+	expectedOrder := []string{"ns:alpha", "ns:middle", "ns:zebra"}
+	for i, expected := range expectedOrder {
+		if receivedDocs[i].ID != expected {
+			t.Errorf("doc[%d]: expected ID %q, got %q", i, expected, receivedDocs[i].ID)
+		}
+	}
+}
+
+func TestSearchDocs_CachedBetweenSearches(t *testing.T) {
+	idx := NewInMemoryIndex()
+	idx.RegisterTool(makeTestTool("tool", "ns", "desc", nil), makeMCPBackend("s"))
+
+	idx.Search("test", 10)
+	idx.Search("another", 10)
+
+	// Assert searchDocsBuilds == 1 (only built once)
+	if idx.searchDocsBuilds != 1 {
+		t.Errorf("expected 1 doc build, got %d", idx.searchDocsBuilds)
+	}
+}
+
+func TestSearchDocs_RebuildsAfterMutation(t *testing.T) {
+	idx := NewInMemoryIndex()
+	idx.RegisterTool(makeTestTool("tool1", "ns", "desc", nil), makeMCPBackend("s"))
+	idx.Search("test", 10) // builds=1
+
+	idx.RegisterTool(makeTestTool("tool2", "ns", "desc", nil), makeMCPBackend("s"))
+	idx.Search("test", 10) // builds=2
+
+	if idx.searchDocsBuilds != 2 {
+		t.Errorf("expected 2 doc builds after mutation, got %d", idx.searchDocsBuilds)
+	}
+}
+
+func TestSearchDocs_ConcurrentDirtyCacheBuildsOnce(t *testing.T) {
+	idx := NewInMemoryIndex()
+	idx.RegisterTool(makeTestTool("tool", "ns", "desc", nil), makeMCPBackend("s"))
+
+	const workers = 32
+	var wg sync.WaitGroup
+	wg.Add(workers)
+
+	for i := 0; i < workers; i++ {
+		go func() {
+			defer wg.Done()
+			if _, err := idx.Search("tool", 10); err != nil {
+				t.Errorf("Search failed: %v", err)
+			}
+		}()
+	}
+
+	wg.Wait()
+
+	if idx.searchDocsBuilds != 1 {
+		t.Errorf("expected 1 doc build under concurrent dirty cache, got %d", idx.searchDocsBuilds)
+	}
+}
+
+func TestSearchDocs_RebuildsAfterUnregister(t *testing.T) {
+	idx := NewInMemoryIndex()
+	idx.RegisterTool(makeTestTool("tool1", "ns", "desc", nil), makeMCPBackend("s1"))
+	idx.RegisterTool(makeTestTool("tool2", "ns", "desc", nil), makeMCPBackend("s2"))
+	idx.Search("test", 10) // builds=1
+
+	idx.UnregisterBackend("ns:tool1", toolmodel.BackendKindMCP, "s1")
+	idx.Search("test", 10) // builds=2
+
+	if idx.searchDocsBuilds != 2 {
+		t.Errorf("expected 2 doc builds after unregister, got %d", idx.searchDocsBuilds)
+	}
+}
+
+func TestSearchDocs_DerivedFieldsRefreshOnUpdate(t *testing.T) {
+	var receivedDocs []SearchDoc
+	mockSearcher := &mockSearcher{
+		searchFunc: func(query string, limit int, docs []SearchDoc) ([]Summary, error) {
+			receivedDocs = docs
+			return nil, nil
+		},
+	}
+
+	idx := NewInMemoryIndex(IndexOptions{Searcher: mockSearcher})
+
+	// Register with description A
+	idx.RegisterTool(makeTestTool("tool", "ns", "description A", nil), makeMCPBackend("s"))
+	idx.Search("test", 10)
+
+	firstDocText := receivedDocs[0].DocText
+	if !strings.Contains(firstDocText, "description a") {
+		t.Errorf("expected docText to contain 'description a', got %q", firstDocText)
+	}
+
+	// Re-register same tool with different tags (MCP fields same, tags can change)
+	// Note: Description is MCP field, so use tags which are toolmodel extension
+	tool := makeTestTool("tool", "ns", "description A", []string{"newtag"})
+	idx.RegisterTool(tool, makeMCPBackend("s"))
+	idx.Search("test", 10)
+
+	// DocText should now include "newtag"
+	if !strings.Contains(receivedDocs[0].DocText, "newtag") {
+		t.Errorf("expected docText to contain 'newtag' after update, got %q", receivedDocs[0].DocText)
 	}
 }

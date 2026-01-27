@@ -89,6 +89,8 @@ type toolRecord struct {
 	backends       []toolmodel.ToolBackend
 	backendKeys    map[string]int // maps backend identity key to index in backends slice
 	normalizedTags []string       // normalized tags for search
+	docText        string         // cached search doc text
+	summary        Summary        // cached summary
 }
 
 // InMemoryIndex is the default in-memory implementation of Index.
@@ -98,6 +100,13 @@ type InMemoryIndex struct {
 	namespaces      map[string]struct{}    // set of namespaces
 	backendSelector BackendSelector
 	searcher        Searcher
+
+	// Search doc cache
+	searchDocs        []SearchDoc
+	searchDocsDirty   bool
+	searchDocsVersion uint64
+	indexVersion      uint64
+	searchDocsBuilds  int // for test visibility
 }
 
 // NewInMemoryIndex creates a new in-memory tool index.
@@ -474,6 +483,7 @@ func (idx *InMemoryIndex) RegisterTool(tool toolmodel.Tool, backend toolmodel.To
 			backendKeys:    map[string]int{backendKey: 0},
 			normalizedTags: normalizedTags,
 		}
+		refreshRecordDerived(record)
 		idx.tools[toolID] = record
 		idx.namespaces[tool.Namespace] = struct{}{}
 	} else {
@@ -483,7 +493,9 @@ func (idx *InMemoryIndex) RegisterTool(tool toolmodel.Tool, backend toolmodel.To
 		}
 
 		// Update toolmodel extensions (Tags) - these are allowed to differ
+		record.tool = tool
 		record.normalizedTags = normalizedTags
+		refreshRecordDerived(record)
 
 		// Check if backend already exists
 		if existingIdx, ok := record.backendKeys[backendKey]; ok {
@@ -496,6 +508,7 @@ func (idx *InMemoryIndex) RegisterTool(tool toolmodel.Tool, backend toolmodel.To
 		}
 	}
 
+	idx.markSearchDocsDirtyLocked()
 	return nil
 }
 
@@ -604,6 +617,7 @@ func (idx *InMemoryIndex) UnregisterBackend(toolID string, kind toolmodel.Backen
 		}
 	}
 
+	idx.markSearchDocsDirtyLocked()
 	return nil
 }
 
@@ -639,21 +653,61 @@ func (idx *InMemoryIndex) GetAllBackends(id string) ([]toolmodel.ToolBackend, er
 
 // Search performs a search over the indexed tools.
 func (idx *InMemoryIndex) Search(query string, limit int) ([]Summary, error) {
+	// Fast path: serve a cached snapshot under a read lock.
 	idx.mu.RLock()
-	defer idx.mu.RUnlock()
-
-	// Build search documents
-	docs := make([]SearchDoc, 0, len(idx.tools))
-	for id, record := range idx.tools {
-		doc := SearchDoc{
-			ID:      id,
-			DocText: buildDocText(record),
-			Summary: buildSummary(record),
-		}
-		docs = append(docs, doc)
+	if !idx.searchDocsDirty && idx.searchDocs != nil && idx.searchDocsVersion == idx.indexVersion {
+		docs := make([]SearchDoc, len(idx.searchDocs))
+		copy(docs, idx.searchDocs)
+		idx.mu.RUnlock()
+		return idx.searcher.Search(query, limit, docs)
 	}
+	idx.mu.RUnlock()
+
+	// Slow path: rebuild the cache under an exclusive lock.
+	idx.mu.Lock()
+	idx.ensureSearchDocsLocked()
+	docs := make([]SearchDoc, len(idx.searchDocs))
+	copy(docs, idx.searchDocs)
+	idx.mu.Unlock()
 
 	return idx.searcher.Search(query, limit, docs)
+}
+
+// ensureSearchDocsLocked rebuilds the search docs cache if dirty.
+// Must be called with idx.mu held.
+func (idx *InMemoryIndex) ensureSearchDocsLocked() {
+	if !idx.searchDocsDirty && idx.searchDocs != nil && idx.searchDocsVersion == idx.indexVersion {
+		return
+	}
+	idx.rebuildSearchDocsLocked()
+}
+
+// rebuildSearchDocsLocked rebuilds the search docs from scratch.
+// Must be called with idx.mu held.
+func (idx *InMemoryIndex) rebuildSearchDocsLocked() {
+	docs := make([]SearchDoc, 0, len(idx.tools))
+	for id, record := range idx.tools {
+		docs = append(docs, SearchDoc{
+			ID:      id,
+			DocText: record.docText,
+			Summary: record.summary,
+		})
+	}
+	// Sort by ID for deterministic order
+	sort.Slice(docs, func(i, j int) bool {
+		return docs[i].ID < docs[j].ID
+	})
+	idx.searchDocs = docs
+	idx.searchDocsDirty = false
+	idx.searchDocsVersion = idx.indexVersion
+	idx.searchDocsBuilds++
+}
+
+// markSearchDocsDirtyLocked marks the search docs cache as stale.
+// Must be called with idx.mu held.
+func (idx *InMemoryIndex) markSearchDocsDirtyLocked() {
+	idx.searchDocsDirty = true
+	idx.indexVersion++
 }
 
 // ListNamespaces returns all namespaces in alphabetical order.
@@ -669,32 +723,38 @@ func (idx *InMemoryIndex) ListNamespaces() ([]string, error) {
 	return result, nil
 }
 
+// refreshRecordDerived recomputes cached derived fields for a tool record.
+func refreshRecordDerived(record *toolRecord) {
+	record.docText = buildDocText(record.tool, record.normalizedTags)
+	record.summary = buildSummary(record.tool, record.normalizedTags)
+}
+
 // buildDocText creates the lowercased search text for a tool.
-func buildDocText(record *toolRecord) string {
+func buildDocText(tool toolmodel.Tool, normalizedTags []string) string {
 	parts := []string{
-		strings.ToLower(record.tool.Name),
-		strings.ToLower(record.tool.Namespace),
-		strings.ToLower(record.tool.Description),
+		strings.ToLower(tool.Name),
+		strings.ToLower(tool.Namespace),
+		strings.ToLower(tool.Description),
 	}
-	for _, tag := range record.normalizedTags {
+	for _, tag := range normalizedTags {
 		parts = append(parts, tag) // already normalized/lowercased
 	}
 	return strings.Join(parts, " ")
 }
 
-// buildSummary creates a Summary from a tool record.
-func buildSummary(record *toolRecord) Summary {
-	shortDesc := record.tool.Description
+// buildSummary creates a Summary from tool fields and normalized tags.
+func buildSummary(tool toolmodel.Tool, normalizedTags []string) Summary {
+	shortDesc := tool.Description
 	if len(shortDesc) > MaxShortDescriptionLen {
 		shortDesc = shortDesc[:MaxShortDescriptionLen]
 	}
 
 	return Summary{
-		ID:               record.tool.ToolID(),
-		Name:             record.tool.Name,
-		Namespace:        record.tool.Namespace,
+		ID:               tool.ToolID(),
+		Name:             tool.Name,
+		Namespace:        tool.Namespace,
 		ShortDescription: shortDesc,
-		Tags:             record.normalizedTags,
+		Tags:             normalizedTags,
 	}
 }
 

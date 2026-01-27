@@ -1359,7 +1359,8 @@ func TestProviderBackendReplacementByIdentity(t *testing.T) {
 	mustRegister(t, idx, tool, makeProviderBackend("provider1", "tool-a"))
 
 	// Re-register with same provider ID + tool ID - should replace
-	tool2 := makeTestTool("mytool", "ns", "updated", nil)
+	// MCP fields must remain identical; toolmodel extensions (e.g., tags) may change.
+	tool2 := makeTestTool("mytool", "ns", "original", []string{"tag"})
 	mustRegister(t, idx, tool2, makeProviderBackend("provider1", "tool-a"))
 
 	backends, err := idx.GetAllBackends("ns:mytool")

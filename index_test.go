@@ -1187,7 +1187,7 @@ func TestTagNormalization_OnIngest(t *testing.T) {
 func TestCustomSearcher(t *testing.T) {
 	// Custom searcher that always returns empty results
 	customSearcher := &mockSearcher{
-		searchFunc: func(_ string, _ int, docs []SearchDoc) ([]Summary, error) {
+		searchFunc: func(_ string, _ int, _ []SearchDoc) ([]Summary, error) {
 			return []Summary{}, nil
 		},
 	}

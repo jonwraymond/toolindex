@@ -105,7 +105,7 @@ func NewInMemoryIndex(opts ...IndexOptions) *InMemoryIndex {
 	idx := &InMemoryIndex{
 		tools:           make(map[string]*toolRecord),
 		namespaces:      make(map[string]struct{}),
-		backendSelector: defaultBackendSelector,
+		backendSelector: DefaultBackendSelector,
 		searcher:        &lexicalSearcher{},
 	}
 
@@ -122,8 +122,9 @@ func NewInMemoryIndex(opts ...IndexOptions) *InMemoryIndex {
 	return idx
 }
 
-// defaultBackendSelector implements the default priority: local > provider > mcp
-func defaultBackendSelector(backends []toolmodel.ToolBackend) toolmodel.ToolBackend {
+// DefaultBackendSelector implements the default priority: local > provider > mcp.
+// Exported so other modules (for example, toolrun) can match the same policy.
+func DefaultBackendSelector(backends []toolmodel.ToolBackend) toolmodel.ToolBackend {
 	if len(backends) == 0 {
 		return toolmodel.ToolBackend{}
 	}

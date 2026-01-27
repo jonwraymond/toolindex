@@ -3,6 +3,7 @@ package toolindex
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -48,6 +49,13 @@ func makeLocalBackend(name string) toolmodel.ToolBackend {
 	return toolmodel.ToolBackend{
 		Kind:  toolmodel.BackendKindLocal,
 		Local: &toolmodel.LocalBackend{Name: name},
+	}
+}
+
+func mustRegister(t *testing.T, idx *InMemoryIndex, tool toolmodel.Tool, backend toolmodel.ToolBackend) {
+	t.Helper()
+	if err := idx.RegisterTool(tool, backend); err != nil {
+		t.Fatalf("RegisterTool failed: %v", err)
 	}
 }
 
@@ -613,8 +621,8 @@ func TestUnregisterBackend(t *testing.T) {
 	tool := makeTestTool("mytool", "ns", "A tool", nil)
 
 	// Register with multiple backends
-	idx.RegisterTool(tool, makeMCPBackend("server1"))
-	idx.RegisterTool(tool, makeLocalBackend("local-handler"))
+	mustRegister(t, idx, tool, makeMCPBackend("server1"))
+	mustRegister(t, idx, tool, makeLocalBackend("local-handler"))
 
 	// Unregister the MCP backend
 	err := idx.UnregisterBackend("ns:mytool", toolmodel.BackendKindMCP, "server1")
@@ -638,7 +646,7 @@ func TestUnregisterBackend_LastBackendRemovesTool(t *testing.T) {
 	idx := NewInMemoryIndex()
 
 	tool := makeTestTool("mytool", "ns", "A tool", nil)
-	idx.RegisterTool(tool, makeMCPBackend("server1"))
+	mustRegister(t, idx, tool, makeMCPBackend("server1"))
 
 	// Unregister the only backend
 	err := idx.UnregisterBackend("ns:mytool", toolmodel.BackendKindMCP, "server1")
@@ -666,7 +674,7 @@ func TestUnregisterBackend_ProviderRequiresFormat(t *testing.T) {
 	idx := NewInMemoryIndex()
 
 	tool := makeTestTool("mytool", "ns", "A tool", nil)
-	idx.RegisterTool(tool, makeProviderBackend("provider1", "tool-a"))
+	mustRegister(t, idx, tool, makeProviderBackend("provider1", "tool-a"))
 
 	// Unregister with proper format "providerID:toolID"
 	err := idx.UnregisterBackend("ns:mytool", toolmodel.BackendKindProvider, "provider1:tool-a")
@@ -685,7 +693,7 @@ func TestUnregisterBackend_ProviderInvalidFormat(t *testing.T) {
 	idx := NewInMemoryIndex()
 
 	tool := makeTestTool("mytool", "ns", "A tool", nil)
-	idx.RegisterTool(tool, makeProviderBackend("provider1", "tool-a"))
+	mustRegister(t, idx, tool, makeProviderBackend("provider1", "tool-a"))
 
 	// Try to unregister without colon - should fail
 	err := idx.UnregisterBackend("ns:mytool", toolmodel.BackendKindProvider, "provider1")
@@ -701,7 +709,7 @@ func TestUnregisterBackend_ProviderEmptyParts(t *testing.T) {
 	idx := NewInMemoryIndex()
 
 	tool := makeTestTool("mytool", "ns", "A tool", nil)
-	idx.RegisterTool(tool, makeProviderBackend("provider1", "tool-a"))
+	mustRegister(t, idx, tool, makeProviderBackend("provider1", "tool-a"))
 
 	// Try with empty providerID
 	err := idx.UnregisterBackend("ns:mytool", toolmodel.BackendKindProvider, ":tool-a")
@@ -732,9 +740,9 @@ func TestDefaultBackendSelection_LocalFirst(t *testing.T) {
 	tool := makeTestTool("mytool", "ns", "A tool", nil)
 
 	// Register in reverse priority order
-	idx.RegisterTool(tool, makeMCPBackend("server1"))
-	idx.RegisterTool(tool, makeProviderBackend("provider1", "id1"))
-	idx.RegisterTool(tool, makeLocalBackend("local1"))
+	mustRegister(t, idx, tool, makeMCPBackend("server1"))
+	mustRegister(t, idx, tool, makeProviderBackend("provider1", "id1"))
+	mustRegister(t, idx, tool, makeLocalBackend("local1"))
 
 	_, backend, err := idx.GetTool("ns:mytool")
 	if err != nil {
@@ -752,8 +760,8 @@ func TestDefaultBackendSelection_ProviderOverMCP(t *testing.T) {
 
 	tool := makeTestTool("mytool", "ns", "A tool", nil)
 
-	idx.RegisterTool(tool, makeMCPBackend("server1"))
-	idx.RegisterTool(tool, makeProviderBackend("provider1", "id1"))
+	mustRegister(t, idx, tool, makeMCPBackend("server1"))
+	mustRegister(t, idx, tool, makeProviderBackend("provider1", "id1"))
 
 	_, backend, err := idx.GetTool("ns:mytool")
 	if err != nil {
@@ -779,8 +787,8 @@ func TestCustomBackendSelector(t *testing.T) {
 	idx := NewInMemoryIndex(IndexOptions{BackendSelector: customSelector})
 
 	tool := makeTestTool("mytool", "ns", "A tool", nil)
-	idx.RegisterTool(tool, makeLocalBackend("local1"))
-	idx.RegisterTool(tool, makeMCPBackend("server1"))
+	mustRegister(t, idx, tool, makeLocalBackend("local1"))
+	mustRegister(t, idx, tool, makeMCPBackend("server1"))
 
 	_, backend, err := idx.GetTool("ns:mytool")
 	if err != nil {
@@ -833,9 +841,9 @@ func TestListNamespaces_Empty(t *testing.T) {
 func TestListNamespaces_MultipleNamespaces(t *testing.T) {
 	idx := NewInMemoryIndex()
 
-	idx.RegisterTool(makeTestTool("tool1", "beta", "desc", nil), makeMCPBackend("s"))
-	idx.RegisterTool(makeTestTool("tool2", "alpha", "desc", nil), makeMCPBackend("s"))
-	idx.RegisterTool(makeTestTool("tool3", "gamma", "desc", nil), makeMCPBackend("s"))
+	mustRegister(t, idx, makeTestTool("tool1", "beta", "desc", nil), makeMCPBackend("s"))
+	mustRegister(t, idx, makeTestTool("tool2", "alpha", "desc", nil), makeMCPBackend("s"))
+	mustRegister(t, idx, makeTestTool("tool3", "gamma", "desc", nil), makeMCPBackend("s"))
 
 	namespaces, err := idx.ListNamespaces()
 	if err != nil {
@@ -857,8 +865,8 @@ func TestListNamespaces_MultipleNamespaces(t *testing.T) {
 func TestListNamespaces_IncludesEmptyNamespace(t *testing.T) {
 	idx := NewInMemoryIndex()
 
-	idx.RegisterTool(makeTestTool("tool1", "", "desc", nil), makeMCPBackend("s"))
-	idx.RegisterTool(makeTestTool("tool2", "ns", "desc", nil), makeMCPBackend("s"))
+	mustRegister(t, idx, makeTestTool("tool1", "", "desc", nil), makeMCPBackend("s"))
+	mustRegister(t, idx, makeTestTool("tool2", "ns", "desc", nil), makeMCPBackend("s"))
 
 	namespaces, err := idx.ListNamespaces()
 	if err != nil {
@@ -880,13 +888,16 @@ func TestListNamespaces_IncludesEmptyNamespace(t *testing.T) {
 func TestListNamespaces_Deterministic(t *testing.T) {
 	idx := NewInMemoryIndex()
 
-	idx.RegisterTool(makeTestTool("tool1", "zebra", "desc", nil), makeMCPBackend("s"))
-	idx.RegisterTool(makeTestTool("tool2", "apple", "desc", nil), makeMCPBackend("s"))
-	idx.RegisterTool(makeTestTool("tool3", "middle", "desc", nil), makeMCPBackend("s"))
+	mustRegister(t, idx, makeTestTool("tool1", "zebra", "desc", nil), makeMCPBackend("s"))
+	mustRegister(t, idx, makeTestTool("tool2", "apple", "desc", nil), makeMCPBackend("s"))
+	mustRegister(t, idx, makeTestTool("tool3", "middle", "desc", nil), makeMCPBackend("s"))
 
 	// Call multiple times, should always be same order
 	for i := 0; i < 3; i++ {
-		namespaces, _ := idx.ListNamespaces()
+		namespaces, err := idx.ListNamespaces()
+		if err != nil {
+			t.Fatalf("ListNamespaces failed: %v", err)
+		}
 		expected := []string{"apple", "middle", "zebra"}
 		for j, ns := range expected {
 			if namespaces[j] != ns {
@@ -903,8 +914,8 @@ func TestListNamespaces_Deterministic(t *testing.T) {
 func TestSearch_ByName(t *testing.T) {
 	idx := NewInMemoryIndex()
 
-	idx.RegisterTool(makeTestTool("calculator", "math", "A calculator tool", nil), makeMCPBackend("s"))
-	idx.RegisterTool(makeTestTool("weather", "api", "Weather information", nil), makeMCPBackend("s"))
+	mustRegister(t, idx, makeTestTool("calculator", "math", "A calculator tool", nil), makeMCPBackend("s"))
+	mustRegister(t, idx, makeTestTool("weather", "api", "Weather information", nil), makeMCPBackend("s"))
 
 	results, err := idx.Search("calculator", 10)
 	if err != nil {
@@ -922,9 +933,9 @@ func TestSearch_ByName(t *testing.T) {
 func TestSearch_ByNamespace(t *testing.T) {
 	idx := NewInMemoryIndex()
 
-	idx.RegisterTool(makeTestTool("add", "math", "Addition", nil), makeMCPBackend("s"))
-	idx.RegisterTool(makeTestTool("sub", "math", "Subtraction", nil), makeMCPBackend("s"))
-	idx.RegisterTool(makeTestTool("weather", "api", "Weather", nil), makeMCPBackend("s"))
+	mustRegister(t, idx, makeTestTool("add", "math", "Addition", nil), makeMCPBackend("s"))
+	mustRegister(t, idx, makeTestTool("sub", "math", "Subtraction", nil), makeMCPBackend("s"))
+	mustRegister(t, idx, makeTestTool("weather", "api", "Weather", nil), makeMCPBackend("s"))
 
 	results, err := idx.Search("math", 10)
 	if err != nil {
@@ -940,8 +951,8 @@ func TestSearch_ByNamespace(t *testing.T) {
 func TestSearch_ByDescription(t *testing.T) {
 	idx := NewInMemoryIndex()
 
-	idx.RegisterTool(makeTestTool("tool1", "ns", "Performs authentication", nil), makeMCPBackend("s"))
-	idx.RegisterTool(makeTestTool("tool2", "ns", "Sends emails", nil), makeMCPBackend("s"))
+	mustRegister(t, idx, makeTestTool("tool1", "ns", "Performs authentication", nil), makeMCPBackend("s"))
+	mustRegister(t, idx, makeTestTool("tool2", "ns", "Sends emails", nil), makeMCPBackend("s"))
 
 	results, err := idx.Search("authentication", 10)
 	if err != nil {
@@ -959,8 +970,8 @@ func TestSearch_ByDescription(t *testing.T) {
 func TestSearch_ByTags(t *testing.T) {
 	idx := NewInMemoryIndex()
 
-	idx.RegisterTool(makeTestTool("tool1", "ns", "desc", []string{"security", "auth"}), makeMCPBackend("s"))
-	idx.RegisterTool(makeTestTool("tool2", "ns", "desc", []string{"networking"}), makeMCPBackend("s"))
+	mustRegister(t, idx, makeTestTool("tool1", "ns", "desc", []string{"security", "auth"}), makeMCPBackend("s"))
+	mustRegister(t, idx, makeTestTool("tool2", "ns", "desc", []string{"networking"}), makeMCPBackend("s"))
 
 	results, err := idx.Search("security", 10)
 	if err != nil {
@@ -978,7 +989,7 @@ func TestSearch_ByTags(t *testing.T) {
 func TestSearch_CaseInsensitive(t *testing.T) {
 	idx := NewInMemoryIndex()
 
-	idx.RegisterTool(makeTestTool("Calculator", "Math", "A CALCULATOR tool", nil), makeMCPBackend("s"))
+	mustRegister(t, idx, makeTestTool("Calculator", "Math", "A CALCULATOR tool", nil), makeMCPBackend("s"))
 
 	results, err := idx.Search("calculator", 10)
 	if err != nil {
@@ -996,7 +1007,7 @@ func TestSearch_Limit(t *testing.T) {
 	// Register many tools with different names
 	for i := 0; i < 20; i++ {
 		name := "searchtool" + string(rune('a'+i))
-		idx.RegisterTool(makeTestTool(name, "ns", "description with searchtool", nil), makeMCPBackend("s"))
+		mustRegister(t, idx, makeTestTool(name, "ns", "description with searchtool", nil), makeMCPBackend("s"))
 	}
 
 	results, err := idx.Search("searchtool", 5)
@@ -1013,9 +1024,9 @@ func TestSearch_RankingNameHigherThanDescription(t *testing.T) {
 	idx := NewInMemoryIndex()
 
 	// Tool with 'calculator' in description
-	idx.RegisterTool(makeTestTool("mathhelper", "ns", "A calculator for math", nil), makeMCPBackend("s1"))
+	mustRegister(t, idx, makeTestTool("mathhelper", "ns", "A calculator for math", nil), makeMCPBackend("s1"))
 	// Tool with 'calculator' in name
-	idx.RegisterTool(makeTestTool("calculator", "ns", "Does math operations", nil), makeMCPBackend("s2"))
+	mustRegister(t, idx, makeTestTool("calculator", "ns", "Does math operations", nil), makeMCPBackend("s2"))
 
 	results, err := idx.Search("calculator", 10)
 	if err != nil {
@@ -1034,7 +1045,7 @@ func TestSearch_RankingNameHigherThanDescription(t *testing.T) {
 func TestSearch_NoResults(t *testing.T) {
 	idx := NewInMemoryIndex()
 
-	idx.RegisterTool(makeTestTool("tool1", "ns", "desc", nil), makeMCPBackend("s"))
+	mustRegister(t, idx, makeTestTool("tool1", "ns", "desc", nil), makeMCPBackend("s"))
 
 	results, err := idx.Search("nonexistent", 10)
 	if err != nil {
@@ -1049,8 +1060,8 @@ func TestSearch_NoResults(t *testing.T) {
 func TestSearch_EmptyQuery(t *testing.T) {
 	idx := NewInMemoryIndex()
 
-	idx.RegisterTool(makeTestTool("tool1", "ns", "desc", nil), makeMCPBackend("s"))
-	idx.RegisterTool(makeTestTool("tool2", "ns", "desc", nil), makeMCPBackend("s"))
+	mustRegister(t, idx, makeTestTool("tool1", "ns", "desc", nil), makeMCPBackend("s"))
+	mustRegister(t, idx, makeTestTool("tool2", "ns", "desc", nil), makeMCPBackend("s"))
 
 	results, err := idx.Search("", 10)
 	if err != nil {
@@ -1071,7 +1082,7 @@ func TestSearch_ReturnsSummaryOnly(t *testing.T) {
 	idx := NewInMemoryIndex()
 
 	tool := makeTestTool("mytool", "ns", "A test tool description", []string{"tag1", "tag2"})
-	idx.RegisterTool(tool, makeMCPBackend("s"))
+	mustRegister(t, idx, tool, makeMCPBackend("s"))
 
 	results, err := idx.Search("mytool", 10)
 	if err != nil {
@@ -1099,7 +1110,7 @@ func TestSearch_TruncatesLongDescription(t *testing.T) {
 
 	longDesc := strings.Repeat("x", 200) // 200 chars
 	tool := makeTestTool("mytool", "ns", longDesc, nil)
-	idx.RegisterTool(tool, makeMCPBackend("s"))
+	mustRegister(t, idx, tool, makeMCPBackend("s"))
 
 	results, err := idx.Search("mytool", 10)
 	if err != nil {
@@ -1120,7 +1131,7 @@ func TestSearch_NormalizedTagsInSummary(t *testing.T) {
 
 	// Register with unnormalized tags
 	tool := makeTestTool("mytool", "ns", "desc", []string{"  UPPER CASE  ", "with spaces"})
-	idx.RegisterTool(tool, makeMCPBackend("s"))
+	mustRegister(t, idx, tool, makeMCPBackend("s"))
 
 	results, err := idx.Search("mytool", 10)
 	if err != nil {
@@ -1156,7 +1167,7 @@ func TestTagNormalization_OnIngest(t *testing.T) {
 	idx := NewInMemoryIndex()
 
 	tool := makeTestTool("mytool", "ns", "desc", []string{"  TAG ONE  ", "TAG-TWO"})
-	idx.RegisterTool(tool, makeMCPBackend("s"))
+	mustRegister(t, idx, tool, makeMCPBackend("s"))
 
 	// Search should work with normalized tags
 	results, err := idx.Search("tag-one", 10)
@@ -1183,7 +1194,7 @@ func TestCustomSearcher(t *testing.T) {
 
 	idx := NewInMemoryIndex(IndexOptions{Searcher: customSearcher})
 
-	idx.RegisterTool(makeTestTool("mytool", "ns", "desc", nil), makeMCPBackend("s"))
+	mustRegister(t, idx, makeTestTool("mytool", "ns", "desc", nil), makeMCPBackend("s"))
 
 	results, err := idx.Search("mytool", 10)
 	if err != nil {
@@ -1211,32 +1222,45 @@ func (m *mockSearcher) Search(query string, limit int, docs []SearchDoc) ([]Summ
 func TestConcurrentAccess(t *testing.T) {
 	idx := NewInMemoryIndex()
 
-	done := make(chan bool)
+	var wg sync.WaitGroup
+	errCh := make(chan error, 400)
 
 	// Writer goroutine
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		for i := 0; i < 100; i++ {
 			tool := makeTestTool("tool"+string(rune('a'+i%26)), "ns", "desc", nil)
-			idx.RegisterTool(tool, makeMCPBackend("s"))
+			if err := idx.RegisterTool(tool, makeMCPBackend("s")); err != nil {
+				errCh <- fmt.Errorf("register: %w", err)
+			}
 		}
-		done <- true
 	}()
 
 	// Reader goroutines
 	for r := 0; r < 3; r++ {
+		wg.Add(1)
 		go func() {
+			defer wg.Done()
 			for i := 0; i < 100; i++ {
-				idx.Search("tool", 10)
-				idx.ListNamespaces()
-				idx.GetTool("ns:toola")
+				if _, err := idx.Search("tool", 10); err != nil {
+					errCh <- fmt.Errorf("search: %w", err)
+				}
+				if _, err := idx.ListNamespaces(); err != nil {
+					errCh <- fmt.Errorf("list namespaces: %w", err)
+				}
+				if _, _, err := idx.GetTool("ns:toola"); err != nil && !errors.Is(err, ErrNotFound) {
+					errCh <- fmt.Errorf("get tool: %w", err)
+				}
 			}
-			done <- true
 		}()
 	}
 
-	// Wait for all goroutines
-	for i := 0; i < 4; i++ {
-		<-done
+	wg.Wait()
+	close(errCh)
+
+	for err := range errCh {
+		t.Errorf("concurrent access error: %v", err)
 	}
 }
 
@@ -1255,9 +1279,11 @@ func TestSearchDoc_ExposedToSearcher(t *testing.T) {
 	}
 
 	idx := NewInMemoryIndex(IndexOptions{Searcher: customSearcher})
-	idx.RegisterTool(makeTestTool("mytool", "ns", "My description", []string{"tag1"}), makeMCPBackend("s"))
+	mustRegister(t, idx, makeTestTool("mytool", "ns", "My description", []string{"tag1"}), makeMCPBackend("s"))
 
-	idx.Search("test", 10)
+	if _, err := idx.Search("test", 10); err != nil {
+		t.Fatalf("Search failed: %v", err)
+	}
 
 	if len(receivedDocs) != 1 {
 		t.Fatalf("expected 1 doc passed to searcher, got %d", len(receivedDocs))
@@ -1313,8 +1339,8 @@ func TestProviderBackendIdentity(t *testing.T) {
 	tool := makeTestTool("mytool", "ns", "desc", nil)
 
 	// Register same provider ID but different tool IDs - should be separate backends
-	idx.RegisterTool(tool, makeProviderBackend("provider1", "tool-a"))
-	idx.RegisterTool(tool, makeProviderBackend("provider1", "tool-b"))
+	mustRegister(t, idx, tool, makeProviderBackend("provider1", "tool-a"))
+	mustRegister(t, idx, tool, makeProviderBackend("provider1", "tool-b"))
 
 	backends, err := idx.GetAllBackends("ns:mytool")
 	if err != nil {
@@ -1330,11 +1356,11 @@ func TestProviderBackendReplacementByIdentity(t *testing.T) {
 	idx := NewInMemoryIndex()
 
 	tool := makeTestTool("mytool", "ns", "original", nil)
-	idx.RegisterTool(tool, makeProviderBackend("provider1", "tool-a"))
+	mustRegister(t, idx, tool, makeProviderBackend("provider1", "tool-a"))
 
 	// Re-register with same provider ID + tool ID - should replace
 	tool2 := makeTestTool("mytool", "ns", "updated", nil)
-	idx.RegisterTool(tool2, makeProviderBackend("provider1", "tool-a"))
+	mustRegister(t, idx, tool2, makeProviderBackend("provider1", "tool-a"))
 
 	backends, err := idx.GetAllBackends("ns:mytool")
 	if err != nil {
@@ -1362,11 +1388,13 @@ func TestSearchDocs_SortedByID(t *testing.T) {
 	idx := NewInMemoryIndex(IndexOptions{Searcher: mockSearcher})
 
 	// Register tools in non-alphabetical order
-	idx.RegisterTool(makeTestTool("zebra", "ns", "desc", nil), makeMCPBackend("s"))
-	idx.RegisterTool(makeTestTool("alpha", "ns", "desc", nil), makeMCPBackend("s"))
-	idx.RegisterTool(makeTestTool("middle", "ns", "desc", nil), makeMCPBackend("s"))
+	mustRegister(t, idx, makeTestTool("zebra", "ns", "desc", nil), makeMCPBackend("s"))
+	mustRegister(t, idx, makeTestTool("alpha", "ns", "desc", nil), makeMCPBackend("s"))
+	mustRegister(t, idx, makeTestTool("middle", "ns", "desc", nil), makeMCPBackend("s"))
 
-	idx.Search("test", 10)
+	if _, err := idx.Search("test", 10); err != nil {
+		t.Fatalf("Search failed: %v", err)
+	}
 
 	// Assert docs are sorted by ID ascending
 	if len(receivedDocs) != 3 {
@@ -1382,10 +1410,14 @@ func TestSearchDocs_SortedByID(t *testing.T) {
 
 func TestSearchDocs_CachedBetweenSearches(t *testing.T) {
 	idx := NewInMemoryIndex()
-	idx.RegisterTool(makeTestTool("tool", "ns", "desc", nil), makeMCPBackend("s"))
+	mustRegister(t, idx, makeTestTool("tool", "ns", "desc", nil), makeMCPBackend("s"))
 
-	idx.Search("test", 10)
-	idx.Search("another", 10)
+	if _, err := idx.Search("test", 10); err != nil {
+		t.Fatalf("Search failed: %v", err)
+	}
+	if _, err := idx.Search("another", 10); err != nil {
+		t.Fatalf("Search failed: %v", err)
+	}
 
 	// Assert searchDocsBuilds == 1 (only built once)
 	if idx.searchDocsBuilds != 1 {
@@ -1395,11 +1427,15 @@ func TestSearchDocs_CachedBetweenSearches(t *testing.T) {
 
 func TestSearchDocs_RebuildsAfterMutation(t *testing.T) {
 	idx := NewInMemoryIndex()
-	idx.RegisterTool(makeTestTool("tool1", "ns", "desc", nil), makeMCPBackend("s"))
-	idx.Search("test", 10) // builds=1
+	mustRegister(t, idx, makeTestTool("tool1", "ns", "desc", nil), makeMCPBackend("s"))
+	if _, err := idx.Search("test", 10); err != nil {
+		t.Fatalf("Search failed: %v", err)
+	} // builds=1
 
-	idx.RegisterTool(makeTestTool("tool2", "ns", "desc", nil), makeMCPBackend("s"))
-	idx.Search("test", 10) // builds=2
+	mustRegister(t, idx, makeTestTool("tool2", "ns", "desc", nil), makeMCPBackend("s"))
+	if _, err := idx.Search("test", 10); err != nil {
+		t.Fatalf("Search failed: %v", err)
+	} // builds=2
 
 	if idx.searchDocsBuilds != 2 {
 		t.Errorf("expected 2 doc builds after mutation, got %d", idx.searchDocsBuilds)
@@ -1408,7 +1444,7 @@ func TestSearchDocs_RebuildsAfterMutation(t *testing.T) {
 
 func TestSearchDocs_ConcurrentDirtyCacheBuildsOnce(t *testing.T) {
 	idx := NewInMemoryIndex()
-	idx.RegisterTool(makeTestTool("tool", "ns", "desc", nil), makeMCPBackend("s"))
+	mustRegister(t, idx, makeTestTool("tool", "ns", "desc", nil), makeMCPBackend("s"))
 
 	const workers = 32
 	var wg sync.WaitGroup
@@ -1432,12 +1468,18 @@ func TestSearchDocs_ConcurrentDirtyCacheBuildsOnce(t *testing.T) {
 
 func TestSearchDocs_RebuildsAfterUnregister(t *testing.T) {
 	idx := NewInMemoryIndex()
-	idx.RegisterTool(makeTestTool("tool1", "ns", "desc", nil), makeMCPBackend("s1"))
-	idx.RegisterTool(makeTestTool("tool2", "ns", "desc", nil), makeMCPBackend("s2"))
-	idx.Search("test", 10) // builds=1
+	mustRegister(t, idx, makeTestTool("tool1", "ns", "desc", nil), makeMCPBackend("s1"))
+	mustRegister(t, idx, makeTestTool("tool2", "ns", "desc", nil), makeMCPBackend("s2"))
+	if _, err := idx.Search("test", 10); err != nil {
+		t.Fatalf("Search failed: %v", err)
+	} // builds=1
 
-	idx.UnregisterBackend("ns:tool1", toolmodel.BackendKindMCP, "s1")
-	idx.Search("test", 10) // builds=2
+	if err := idx.UnregisterBackend("ns:tool1", toolmodel.BackendKindMCP, "s1"); err != nil {
+		t.Fatalf("UnregisterBackend failed: %v", err)
+	}
+	if _, err := idx.Search("test", 10); err != nil {
+		t.Fatalf("Search failed: %v", err)
+	} // builds=2
 
 	if idx.searchDocsBuilds != 2 {
 		t.Errorf("expected 2 doc builds after unregister, got %d", idx.searchDocsBuilds)
@@ -1456,8 +1498,10 @@ func TestSearchDocs_DerivedFieldsRefreshOnUpdate(t *testing.T) {
 	idx := NewInMemoryIndex(IndexOptions{Searcher: mockSearcher})
 
 	// Register with description A
-	idx.RegisterTool(makeTestTool("tool", "ns", "description A", nil), makeMCPBackend("s"))
-	idx.Search("test", 10)
+	mustRegister(t, idx, makeTestTool("tool", "ns", "description A", nil), makeMCPBackend("s"))
+	if _, err := idx.Search("test", 10); err != nil {
+		t.Fatalf("Search failed: %v", err)
+	}
 
 	firstDocText := receivedDocs[0].DocText
 	if !strings.Contains(firstDocText, "description a") {
@@ -1467,8 +1511,10 @@ func TestSearchDocs_DerivedFieldsRefreshOnUpdate(t *testing.T) {
 	// Re-register same tool with different tags (MCP fields same, tags can change)
 	// Note: Description is MCP field, so use tags which are toolmodel extension
 	tool := makeTestTool("tool", "ns", "description A", []string{"newtag"})
-	idx.RegisterTool(tool, makeMCPBackend("s"))
-	idx.Search("test", 10)
+	mustRegister(t, idx, tool, makeMCPBackend("s"))
+	if _, err := idx.Search("test", 10); err != nil {
+		t.Fatalf("Search failed: %v", err)
+	}
 
 	// DocText should now include "newtag"
 	if !strings.Contains(receivedDocs[0].DocText, "newtag") {

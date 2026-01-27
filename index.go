@@ -736,9 +736,7 @@ func buildDocText(tool toolmodel.Tool, normalizedTags []string) string {
 		strings.ToLower(tool.Namespace),
 		strings.ToLower(tool.Description),
 	}
-	for _, tag := range normalizedTags {
-		parts = append(parts, tag) // already normalized/lowercased
-	}
+	parts = append(parts, normalizedTags...) // already normalized/lowercased
 	return strings.Join(parts, " ")
 }
 

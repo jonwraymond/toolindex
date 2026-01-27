@@ -105,6 +105,6 @@ These are provided via `toolindex.IndexOptions`.
 - `toolcode`: `v0.1.1`
 - `toolruntime`: `v0.1.1`
 - `toolsearch`: `v0.1.1`
-- `metatools-mcp`: `v0.1.3`
+- `metatools-mcp`: `v0.1.4`
 
 Downstream libraries should import tagged versions to keep the stack aligned.

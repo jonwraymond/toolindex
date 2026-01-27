@@ -1187,7 +1187,7 @@ func TestTagNormalization_OnIngest(t *testing.T) {
 func TestCustomSearcher(t *testing.T) {
 	// Custom searcher that always returns empty results
 	customSearcher := &mockSearcher{
-		searchFunc: func(query string, limit int, docs []SearchDoc) ([]Summary, error) {
+		searchFunc: func(_ string, _ int, docs []SearchDoc) ([]Summary, error) {
 			return []Summary{}, nil
 		},
 	}
@@ -1272,7 +1272,7 @@ func TestSearchDoc_ExposedToSearcher(t *testing.T) {
 	var receivedDocs []SearchDoc
 
 	customSearcher := &mockSearcher{
-		searchFunc: func(query string, limit int, docs []SearchDoc) ([]Summary, error) {
+		searchFunc: func(_ string, _ int, docs []SearchDoc) ([]Summary, error) {
 			receivedDocs = docs
 			return []Summary{}, nil
 		},
@@ -1380,7 +1380,7 @@ func TestProviderBackendReplacementByIdentity(t *testing.T) {
 func TestSearchDocs_SortedByID(t *testing.T) {
 	var receivedDocs []SearchDoc
 	mockSearcher := &mockSearcher{
-		searchFunc: func(query string, limit int, docs []SearchDoc) ([]Summary, error) {
+		searchFunc: func(_ string, _ int, docs []SearchDoc) ([]Summary, error) {
 			receivedDocs = docs
 			return nil, nil
 		},
@@ -1490,7 +1490,7 @@ func TestSearchDocs_RebuildsAfterUnregister(t *testing.T) {
 func TestSearchDocs_DerivedFieldsRefreshOnUpdate(t *testing.T) {
 	var receivedDocs []SearchDoc
 	mockSearcher := &mockSearcher{
-		searchFunc: func(query string, limit int, docs []SearchDoc) ([]Summary, error) {
+		searchFunc: func(_ string, _ int, docs []SearchDoc) ([]Summary, error) {
 			receivedDocs = docs
 			return nil, nil
 		},

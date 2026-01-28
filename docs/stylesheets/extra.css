@@ -74,3 +74,16 @@ body {
   border-radius: 10px;
   overflow: hidden;
 }
+
+/* Light-mode header contrast */
+[data-md-color-scheme="default"] .md-header__title,
+[data-md-color-scheme="default"] .md-header__topic,
+[data-md-color-scheme="default"] .md-tabs__link,
+[data-md-color-scheme="default"] .md-header__button {
+  color: var(--brand-ink);
+}
+
+[data-md-color-scheme="default"] .md-tabs__link--active {
+  color: var(--brand-primary);
+}
+

@@ -4,23 +4,7 @@ This journey shows how `toolindex` supports end-to-end agent workflows by poweri
 
 ## End-to-end flow (stack view)
 
-```mermaid
-sequenceDiagram
-  participant Loader as Tool Loader
-  participant Index as toolindex
-  participant MCP as metatools-mcp
-  participant Agent
-  participant Docs as tooldocs
-  participant Runner as toolrun
-
-  Loader->>Index: RegisterTool(s)
-  Agent->>MCP: search_tools(query)
-  MCP->>Index: Search
-  Agent->>MCP: describe_tool(tool_id)
-  MCP->>Docs: DescribeTool
-  Agent->>MCP: run_tool(tool_id, args)
-  MCP->>Runner: Run
-```
+![Diagram](assets/diagrams/user-journey.svg)
 
 ## Step-by-step
 

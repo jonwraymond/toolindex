@@ -1,0 +1,39 @@
+direction: down
+
+style: { font-size: 14 }
+
+loader: "Tool Loader" {
+  shape: oval
+}
+
+agent: "Agent" {
+  shape: oval
+}
+
+index: "toolindex" {
+  shape: cylinder
+  style: { shadow: true }
+}
+
+metatools: "metatools-mcp" {
+  shape: hexagon
+}
+
+docs: "tooldocs" {
+  shape: document
+}
+
+runner: "toolrun" {
+  shape: step
+}
+
+loader -> index: "RegisterTools"
+
+agent -> metatools: "search_tools(query)"
+metatools -> index: "Search"
+
+agent -> metatools: "describe_tool(tool_id)"
+metatools -> docs: "DescribeTool"
+
+agent -> metatools: "run_tool(tool_id, args)"
+metatools -> runner: "Run"

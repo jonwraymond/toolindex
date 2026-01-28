@@ -5,31 +5,15 @@ It is optimized for frequent reads and infrequent writes.
 
 ## Registration + search flow
 
-```mermaid
-flowchart LR
-  A[RegisterTool(s)] --> B[toolRecord map]
-  B --> C[SearchDoc cache]
-  C --> D[Searcher]
-  D --> E[Summary list]
 
-  B --> F[GetTool]
-  B --> G[ListNamespaces]
-```
+![Diagram](assets/diagrams/registration-search-flow.svg)
+
 
 ## Search sequence
 
-```mermaid
-sequenceDiagram
-  participant Client
-  participant Index
-  participant Searcher
 
-  Client->>Index: Search(query, limit)
-  Index->>Index: Build docs (if dirty)
-  Index->>Searcher: Search(query, docs)
-  Searcher-->>Index: summaries
-  Index-->>Client: summaries
-```
+![Diagram](assets/diagrams/registration-search-flow.svg)
+
 
 ## Progressive disclosure contract
 

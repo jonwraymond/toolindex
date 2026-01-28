@@ -1,7 +1,9 @@
 # Architecture
 
-`toolindex` maintains a canonical map of tools and a cached search document
-set. It is designed for fast reads and infrequent writes.
+`toolindex` maintains a canonical map of tools and a cached search document set.
+It is optimized for frequent reads and infrequent writes.
+
+## Registration + search flow
 
 ```mermaid
 flowchart LR
@@ -14,6 +16,21 @@ flowchart LR
   B --> G[ListNamespaces]
 ```
 
+## Search sequence
+
+```mermaid
+sequenceDiagram
+  participant Client
+  participant Index
+  participant Searcher
+
+  Client->>Index: Search(query, limit)
+  Index->>Index: Build docs (if dirty)
+  Index->>Searcher: Search(query, docs)
+  Searcher-->>Index: summaries
+  Index-->>Client: summaries
+```
+
 ## Default backend policy
 
 The default backend selector prefers:
@@ -22,5 +39,4 @@ The default backend selector prefers:
 2. provider
 3. mcp
 
-This policy is exported as `toolindex.DefaultBackendSelector` so downstream
-layers can stay consistent.
+Exported as `toolindex.DefaultBackendSelector`.

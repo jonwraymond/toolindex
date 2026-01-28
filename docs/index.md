@@ -4,13 +4,13 @@
 It stores `toolmodel.Tool` + `toolmodel.ToolBackend`, provides search, and
 returns token-cheap summaries.
 
-## What this library provides
+## Key APIs
 
-- In-memory index with thread-safe lookup
-- Search over name/namespace/description/tags
-- Namespace listing
-- Default backend selection (local > provider > mcp)
-- Optional searcher injection (e.g., BM25 via `toolsearch`)
+- `Index` interface
+- `InMemoryIndex` implementation
+- `Search` + `ListNamespaces`
+- `RegisterTool(s)` + `GetTool`
+- `Searcher` interface for pluggable ranking
 
 ## Quickstart
 
@@ -27,6 +27,6 @@ for _, s := range summaries {
 
 ## Next
 
-- Architecture and internal data model: `architecture.md`
+- Architecture and data flow: `architecture.md`
 - Usage patterns and options: `usage.md`
-- Examples and custom search: `examples.md`
+- Searcher examples: `examples.md`

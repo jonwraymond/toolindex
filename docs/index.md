@@ -42,3 +42,5 @@ for _, s := range summaries {
 - Architecture and data flow: `architecture.md`
 - Usage patterns and options: `usage.md`
 - Searcher examples: `examples.md`
+- Design Notes: `design-notes.md`
+- User Journey: `user-journey.md`

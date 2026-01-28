@@ -96,6 +96,12 @@ fmt.Println(defaultBackend.Kind, len(allBackends))
 
 These are provided via `toolindex.IndexOptions`.
 
+## Documentation
+
+- `docs/index.md` — overview
+- `docs/design-notes.md` — tradeoffs and error semantics
+- `docs/user-journey.md` — end-to-end agent workflow
+
 ## Version compatibility
 
 See `VERSIONS.md` for the authoritative, auto-generated compatibility matrix.

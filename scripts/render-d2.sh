@@ -18,4 +18,7 @@ fi
 for f in "${files[@]}"; do
   out="docs/assets/diagrams/$(basename "${f%.d2}").svg"
   d2 --layout=elk --theme=104 --dark-theme=201 --pad=24 --center "$f" "$out"
+  if command -v perl >/dev/null 2>&1; then
+    perl -pi -e 's/data-d2-version="[^"]+"/data-d2-version="0.7.1"/' "$out"
+  fi
 done

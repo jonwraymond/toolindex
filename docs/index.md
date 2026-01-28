@@ -4,6 +4,12 @@
 It stores `toolmodel.Tool` + `toolmodel.ToolBackend`, provides search, and
 returns token-cheap summaries.
 
+[![Docs](https://img.shields.io/badge/docs-ai--tools--stack-blue)](https://jonwraymond.github.io/ai-tools-stack/)
+
+## Deep dives
+- Design Notes: `design-notes.md`
+- User Journey: `user-journey.md`
+
 ## Motivation
 
 - **Progressive disclosure**: search returns summaries, not schemas
@@ -45,6 +51,3 @@ for _, s := range summaries {
 - Design Notes: `design-notes.md`
 - User Journey: `user-journey.md`
 
-!!! note "Deep dives"
-    - Design Notes: `design-notes.md`
-    - User Journey: `user-journey.md`

@@ -25,6 +25,19 @@ jobs:
       - name: Download modules
         run: go mod download
 
+
+      - name: Install D2
+        run: |
+          go install github.com/terrastruct/d2/cmd/d2@v0.7.1
+          echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
+
+      - name: Render D2 diagrams
+        run: |
+          ./scripts/render-d2.sh
+          if [ -d docs/diagrams ]; then
+            git diff --exit-code docs/diagrams docs/assets/diagrams
+          fi
+
       - name: golangci-lint (revive enabled)
         uses: golangci/golangci-lint-action@v6
         with:

@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -77,6 +78,38 @@ type Searcher interface {
 	Search(query string, limit int, docs []SearchDoc) ([]Summary, error)
 }
 
+// ChangeType describes a mutation event in the index.
+type ChangeType string
+
+const (
+	ChangeRegistered     ChangeType = "registered"
+	ChangeUpdated        ChangeType = "updated"
+	ChangeBackendRemoved ChangeType = "backend_removed"
+	ChangeToolRemoved    ChangeType = "tool_removed"
+	ChangeRefreshed      ChangeType = "refreshed"
+)
+
+// ChangeEvent captures a mutation in the index for reactive integration.
+type ChangeEvent struct {
+	Type    ChangeType
+	ToolID  string
+	Backend toolmodel.ToolBackend
+	Version uint64
+}
+
+// ChangeListener receives change events from an Index implementation.
+type ChangeListener func(ChangeEvent)
+
+// ChangeNotifier is an optional interface for receiving change events.
+type ChangeNotifier interface {
+	OnChange(listener ChangeListener) (unsubscribe func())
+}
+
+// Refresher is an optional interface for forcing a refresh of cached search docs.
+type Refresher interface {
+	Refresh() uint64
+}
+
 // IndexOptions configures the behavior of an Index implementation.
 type IndexOptions struct {
 	BackendSelector BackendSelector
@@ -101,6 +134,8 @@ type InMemoryIndex struct {
 	namespaceCounts map[string]int         // number of tools per namespace
 	backendSelector BackendSelector
 	searcher        Searcher
+	listeners       []listenerEntry
+	nextListenerID  uint64
 
 	// Search doc cache
 	searchDocs        []SearchDoc
@@ -108,6 +143,11 @@ type InMemoryIndex struct {
 	searchDocsVersion uint64
 	indexVersion      uint64
 	searchDocsBuilds  int // for test visibility
+}
+
+type listenerEntry struct {
+	id uint64
+	fn ChangeListener
 }
 
 // NewInMemoryIndex creates a new in-memory tool index.
@@ -131,6 +171,47 @@ func NewInMemoryIndex(opts ...IndexOptions) *InMemoryIndex {
 	}
 
 	return idx
+}
+
+// OnChange registers a listener for index mutations.
+// Returns an unsubscribe function.
+func (idx *InMemoryIndex) OnChange(listener ChangeListener) func() {
+	if listener == nil {
+		return func() {}
+	}
+	idx.mu.Lock()
+	idx.nextListenerID++
+	entry := listenerEntry{id: idx.nextListenerID, fn: listener}
+	idx.listeners = append(idx.listeners, entry)
+	idx.mu.Unlock()
+
+	return func() {
+		idx.removeListener(entry.id)
+	}
+}
+
+func (idx *InMemoryIndex) removeListener(id uint64) {
+	idx.mu.Lock()
+	defer idx.mu.Unlock()
+	for i, entry := range idx.listeners {
+		if entry.id == id {
+			idx.listeners = append(idx.listeners[:i], idx.listeners[i+1:]...)
+			return
+		}
+	}
+}
+
+// Refresh rebuilds the search docs cache and emits a refresh event.
+func (idx *InMemoryIndex) Refresh() uint64 {
+	idx.mu.Lock()
+	idx.markSearchDocsDirtyLocked()
+	idx.rebuildSearchDocsLocked()
+	version := idx.indexVersion
+	listeners := idx.snapshotListenersLocked()
+	idx.mu.Unlock()
+
+	notifyListeners(listeners, ChangeEvent{Type: ChangeRefreshed, Version: version})
+	return version
 }
 
 // DefaultBackendSelector implements the default priority: local > provider > mcp.
@@ -165,18 +246,33 @@ func backendIdentity(backend toolmodel.ToolBackend) string {
 	switch backend.Kind {
 	case toolmodel.BackendKindMCP:
 		if backend.MCP != nil {
-			return string(backend.Kind) + ":" + backend.MCP.ServerName
+			return encodeIdentity(string(backend.Kind), backend.MCP.ServerName)
 		}
 	case toolmodel.BackendKindProvider:
 		if backend.Provider != nil {
-			return string(backend.Kind) + ":" + backend.Provider.ProviderID + ":" + backend.Provider.ToolID
+			return encodeIdentity(string(backend.Kind), backend.Provider.ProviderID, backend.Provider.ToolID)
 		}
 	case toolmodel.BackendKindLocal:
 		if backend.Local != nil {
-			return string(backend.Kind) + ":" + backend.Local.Name
+			return encodeIdentity(string(backend.Kind), backend.Local.Name)
 		}
 	}
 	return ""
+}
+
+// encodeIdentity builds an unambiguous identity string using length-prefixed parts.
+// This prevents collisions when fields include separators like ":".
+func encodeIdentity(parts ...string) string {
+	var b strings.Builder
+	for i, part := range parts {
+		if i > 0 {
+			b.WriteByte('|')
+		}
+		b.WriteString(strconv.Itoa(len(part)))
+		b.WriteByte(':')
+		b.WriteString(part)
+	}
+	return b.String()
 }
 
 // validateBackend checks if a backend is valid.
@@ -499,9 +595,9 @@ func (idx *InMemoryIndex) RegisterTool(tool toolmodel.Tool, backend toolmodel.To
 	normalizedTags := toolmodel.NormalizeTags(tool.Tags)
 
 	idx.mu.Lock()
-	defer idx.mu.Unlock()
 
 	record, exists := idx.tools[toolID]
+	changeType := ChangeRegistered
 	if !exists {
 		record = &toolRecord{
 			tool:           tool,
@@ -513,8 +609,10 @@ func (idx *InMemoryIndex) RegisterTool(tool toolmodel.Tool, backend toolmodel.To
 		idx.tools[toolID] = record
 		idx.addNamespaceLocked(tool.Namespace)
 	} else {
+		changeType = ChangeUpdated
 		// Check MCP field consistency: new tool's MCP fields must match existing
 		if !toolMCPFieldsEqual(record.tool, tool) {
+			idx.mu.Unlock()
 			return fmt.Errorf("%w: tool %q MCP fields differ from existing registration", ErrInvalidTool, toolID)
 		}
 
@@ -541,6 +639,16 @@ func (idx *InMemoryIndex) RegisterTool(tool toolmodel.Tool, backend toolmodel.To
 	}
 
 	idx.markSearchDocsDirtyLocked()
+	version := idx.indexVersion
+	listeners := idx.snapshotListenersLocked()
+	idx.mu.Unlock()
+
+	notifyListeners(listeners, ChangeEvent{
+		Type:    changeType,
+		ToolID:  toolID,
+		Backend: backend,
+		Version: version,
+	})
 	return nil
 }
 
@@ -576,6 +684,9 @@ func (idx *InMemoryIndex) RegisterToolsFromMCP(serverName string, tools []toolmo
 // For MCP backends, backendID is the server name.
 // For local backends, backendID is the handler name.
 func (idx *InMemoryIndex) UnregisterBackend(toolID string, kind toolmodel.BackendKind, backendID string) error {
+	var providerID string
+	var providerToolID string
+
 	// Validate backendID format for provider backends
 	if kind == toolmodel.BackendKindProvider {
 		if !strings.Contains(backendID, ":") {
@@ -585,13 +696,15 @@ func (idx *InMemoryIndex) UnregisterBackend(toolID string, kind toolmodel.Backen
 		if parts[0] == "" || parts[1] == "" {
 			return fmt.Errorf("%w: provider backendID must have non-empty providerID and toolID", ErrInvalidBackend)
 		}
+		providerID = parts[0]
+		providerToolID = parts[1]
 	}
 
 	idx.mu.Lock()
-	defer idx.mu.Unlock()
 
 	record, exists := idx.tools[toolID]
 	if !exists {
+		idx.mu.Unlock()
 		return fmt.Errorf("%w: %s", ErrNotFound, toolID)
 	}
 
@@ -599,12 +712,11 @@ func (idx *InMemoryIndex) UnregisterBackend(toolID string, kind toolmodel.Backen
 	var searchKey string
 	switch kind {
 	case toolmodel.BackendKindMCP:
-		searchKey = string(kind) + ":" + backendID
+		searchKey = encodeIdentity(string(kind), backendID)
 	case toolmodel.BackendKindProvider:
-		// backendID is already validated as "providerID:toolID"
-		searchKey = string(kind) + ":" + backendID
+		searchKey = encodeIdentity(string(kind), providerID, providerToolID)
 	case toolmodel.BackendKindLocal:
-		searchKey = string(kind) + ":" + backendID
+		searchKey = encodeIdentity(string(kind), backendID)
 	}
 
 	// Find and remove the backend
@@ -618,8 +730,11 @@ func (idx *InMemoryIndex) UnregisterBackend(toolID string, kind toolmodel.Backen
 	}
 
 	if foundIdx == -1 {
+		idx.mu.Unlock()
 		return fmt.Errorf("%w: backend not found", ErrNotFound)
 	}
+
+	removedBackend := record.backends[foundIdx]
 
 	// Remove from slice
 	record.backends = append(record.backends[:foundIdx], record.backends[foundIdx+1:]...)
@@ -632,13 +747,25 @@ func (idx *InMemoryIndex) UnregisterBackend(toolID string, kind toolmodel.Backen
 	}
 
 	// If no backends left, remove the tool entirely
+	changeType := ChangeBackendRemoved
 	if len(record.backends) == 0 {
 		namespace := record.tool.Namespace
 		delete(idx.tools, toolID)
 		idx.removeNamespaceLocked(namespace)
+		changeType = ChangeToolRemoved
 	}
 
 	idx.markSearchDocsDirtyLocked()
+	version := idx.indexVersion
+	listeners := idx.snapshotListenersLocked()
+	idx.mu.Unlock()
+
+	notifyListeners(listeners, ChangeEvent{
+		Type:    changeType,
+		ToolID:  toolID,
+		Backend: removedBackend,
+		Version: version,
+	})
 	return nil
 }
 
@@ -729,6 +856,23 @@ func (idx *InMemoryIndex) rebuildSearchDocsLocked() {
 func (idx *InMemoryIndex) markSearchDocsDirtyLocked() {
 	idx.searchDocsDirty = true
 	idx.indexVersion++
+}
+
+func (idx *InMemoryIndex) snapshotListenersLocked() []ChangeListener {
+	if len(idx.listeners) == 0 {
+		return nil
+	}
+	out := make([]ChangeListener, len(idx.listeners))
+	for i, entry := range idx.listeners {
+		out[i] = entry.fn
+	}
+	return out
+}
+
+func notifyListeners(listeners []ChangeListener, event ChangeEvent) {
+	for _, listener := range listeners {
+		listener(event)
+	}
 }
 
 // ListNamespaces returns all namespaces in alphabetical order.

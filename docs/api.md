@@ -18,6 +18,37 @@ type Index interface {
 }
 ```
 
+## Change notifications (optional)
+
+```go
+type ChangeType string
+
+const (
+  ChangeRegistered     ChangeType = "registered"
+  ChangeUpdated        ChangeType = "updated"
+  ChangeBackendRemoved ChangeType = "backend_removed"
+  ChangeToolRemoved    ChangeType = "tool_removed"
+  ChangeRefreshed      ChangeType = "refreshed"
+)
+
+type ChangeEvent struct {
+  Type    ChangeType
+  ToolID  string
+  Backend toolmodel.ToolBackend
+  Version uint64
+}
+
+type ChangeListener func(ChangeEvent)
+
+type ChangeNotifier interface {
+  OnChange(listener ChangeListener) (unsubscribe func())
+}
+
+type Refresher interface {
+  Refresh() uint64
+}
+```
+
 ## Summary
 
 ```go

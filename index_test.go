@@ -318,6 +318,66 @@ func TestRegisterTool_ReplacesSameBackend(t *testing.T) {
 	}
 }
 
+func TestRegisterTool_BackendIdentityNoColonCollision(t *testing.T) {
+	idx := NewInMemoryIndex()
+	tool := makeTestTool("mytool", "ns", "desc", nil)
+
+	backendA := makeProviderBackend("a:b", "c")
+	backendB := makeProviderBackend("a", "b:c")
+
+	if err := idx.RegisterTool(tool, backendA); err != nil {
+		t.Fatalf("RegisterTool backendA failed: %v", err)
+	}
+	if err := idx.RegisterTool(tool, backendB); err != nil {
+		t.Fatalf("RegisterTool backendB failed: %v", err)
+	}
+
+	backends, err := idx.GetAllBackends("ns:mytool")
+	if err != nil {
+		t.Fatalf("GetAllBackends failed: %v", err)
+	}
+	if len(backends) != 2 {
+		t.Fatalf("expected 2 backends, got %d", len(backends))
+	}
+}
+
+func TestInMemoryIndex_OnChange_EmitsEvents(t *testing.T) {
+	idx := NewInMemoryIndex()
+	var events []ChangeEvent
+	idx.OnChange(func(ev ChangeEvent) {
+		events = append(events, ev)
+	})
+
+	tool := makeTestTool("mytool", "ns", "desc", nil)
+	backend := makeMCPBackend("server1")
+
+	if err := idx.RegisterTool(tool, backend); err != nil {
+		t.Fatalf("RegisterTool failed: %v", err)
+	}
+	if len(events) != 1 {
+		t.Fatalf("expected 1 event, got %d", len(events))
+	}
+	if events[0].Type != ChangeRegistered {
+		t.Fatalf("expected ChangeRegistered, got %v", events[0].Type)
+	}
+	if events[0].ToolID != "ns:mytool" {
+		t.Fatalf("expected tool ID ns:mytool, got %q", events[0].ToolID)
+	}
+	if events[0].Version == 0 {
+		t.Fatalf("expected version > 0")
+	}
+
+	if err := idx.UnregisterBackend(tool.ToolID(), backend.Kind, backend.MCP.ServerName); err != nil {
+		t.Fatalf("UnregisterBackend failed: %v", err)
+	}
+	if len(events) != 2 {
+		t.Fatalf("expected 2 events, got %d", len(events))
+	}
+	if events[1].Type != ChangeToolRemoved {
+		t.Fatalf("expected ChangeToolRemoved, got %v", events[1].Type)
+	}
+}
+
 func TestRegisterTool_MCPFieldMismatchRejected(t *testing.T) {
 	idx := NewInMemoryIndex()
 

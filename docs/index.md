@@ -4,6 +4,12 @@
 It stores `toolmodel.Tool` + `toolmodel.ToolBackend`, provides search, and
 returns token-cheap summaries.
 
+## Motivation
+
+- **Progressive disclosure**: search returns summaries, not schemas
+- **Deterministic lookup**: canonical tool IDs resolve to stable backends
+- **Pluggable search**: swap lexical search for BM25 or semantic ranking
+
 ## Key APIs
 
 - `Index` interface
@@ -24,6 +30,12 @@ for _, s := range summaries {
   fmt.Println(s.ID, s.ShortDescription)
 }
 ```
+
+## Usability notes
+
+- Summaries are token-cheap and safe to display in discovery
+- Namespaces group tools for easy filtering
+- Backends can be replaced without changing the tool ID
 
 ## Next
 

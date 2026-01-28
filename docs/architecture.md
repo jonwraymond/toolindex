@@ -31,6 +31,11 @@ sequenceDiagram
   Index-->>Client: summaries
 ```
 
+## Progressive disclosure contract
+
+- `Search` returns summaries only
+- Schema and examples are retrieved later via `tooldocs`
+
 ## Default backend policy
 
 The default backend selector prefers:

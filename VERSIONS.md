@@ -5,7 +5,7 @@
 - `tooldocs`: `v0.1.10`
 - `toolrun`: `v0.1.9`
 - `toolcode`: `v0.1.10`
-- `toolruntime`: `v0.1.9`
+- `toolruntime`: `v0.1.10`
 - `toolsearch`: `v0.1.9`
 - `metatools-mcp`: `v0.1.4`
 

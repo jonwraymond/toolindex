@@ -1,0 +1,76 @@
+/* Tool docs - modern theme overrides */
+:root {
+  --brand-primary: #0f766e;
+  --brand-accent: #f59e0b;
+  --brand-ink: #0f172a;
+  --brand-muted: #475569;
+  --page-bg: linear-gradient(180deg, #f6f7fb 0%, #eef2f6 100%);
+}
+
+[data-md-color-scheme="default"] {
+  background: var(--page-bg);
+}
+
+[data-md-color-scheme="slate"] {
+  --page-bg: linear-gradient(180deg, #0b0f14 0%, #0f1720 100%);
+  --brand-ink: #e2e8f0;
+  --brand-muted: #94a3b8;
+}
+
+body {
+  background: var(--page-bg);
+}
+
+.md-header {
+  backdrop-filter: blur(10px);
+  background: color-mix(in srgb, var(--brand-ink) 2%, transparent);
+}
+
+.md-tabs {
+  backdrop-filter: blur(8px);
+}
+
+.md-content h1 {
+  letter-spacing: -0.02em;
+}
+
+.md-content h2 {
+  letter-spacing: -0.01em;
+}
+
+.md-content p,
+.md-content li {
+  color: var(--brand-muted);
+}
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.md-content__inner > * {
+  animation: fadeUp 0.35s ease-out both;
+}
+
+.md-content__inner > *:nth-child(1) { animation-delay: 0.02s; }
+.md-content__inner > *:nth-child(2) { animation-delay: 0.04s; }
+.md-content__inner > *:nth-child(3) { animation-delay: 0.06s; }
+.md-content__inner > *:nth-child(4) { animation-delay: 0.08s; }
+.md-content__inner > *:nth-child(5) { animation-delay: 0.10s; }
+.md-content__inner > *:nth-child(6) { animation-delay: 0.12s; }
+.md-content__inner > *:nth-child(7) { animation-delay: 0.14s; }
+.md-content__inner > *:nth-child(8) { animation-delay: 0.16s; }
+
+.md-content .admonition {
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(2, 6, 23, 0.06);
+}
+
+.md-content pre code {
+  border-radius: 10px;
+}
+
+.md-content table {
+  border-radius: 10px;
+  overflow: hidden;
+}

@@ -98,6 +98,7 @@ type InMemoryIndex struct {
 	mu              sync.RWMutex
 	tools           map[string]*toolRecord // keyed by tool ID
 	namespaces      map[string]struct{}    // set of namespaces
+	namespaceCounts map[string]int         // number of tools per namespace
 	backendSelector BackendSelector
 	searcher        Searcher
 
@@ -114,6 +115,7 @@ func NewInMemoryIndex(opts ...IndexOptions) *InMemoryIndex {
 	idx := &InMemoryIndex{
 		tools:           make(map[string]*toolRecord),
 		namespaces:      make(map[string]struct{}),
+		namespaceCounts: make(map[string]int),
 		backendSelector: DefaultBackendSelector,
 		searcher:        &lexicalSearcher{},
 	}
@@ -456,6 +458,30 @@ func boolPtrEqual(a, b *bool) bool {
 	return *a == *b
 }
 
+func (idx *InMemoryIndex) addNamespaceLocked(namespace string) {
+	if idx.namespaceCounts == nil {
+		idx.namespaceCounts = make(map[string]int)
+	}
+	idx.namespaceCounts[namespace]++
+	idx.namespaces[namespace] = struct{}{}
+}
+
+func (idx *InMemoryIndex) removeNamespaceLocked(namespace string) {
+	if idx.namespaceCounts == nil {
+		return
+	}
+	count, ok := idx.namespaceCounts[namespace]
+	if !ok {
+		return
+	}
+	if count <= 1 {
+		delete(idx.namespaceCounts, namespace)
+		delete(idx.namespaces, namespace)
+		return
+	}
+	idx.namespaceCounts[namespace] = count - 1
+}
+
 // RegisterTool registers a single tool with its backend.
 func (idx *InMemoryIndex) RegisterTool(tool toolmodel.Tool, backend toolmodel.ToolBackend) error {
 	// Validate tool
@@ -485,11 +511,17 @@ func (idx *InMemoryIndex) RegisterTool(tool toolmodel.Tool, backend toolmodel.To
 		}
 		refreshRecordDerived(record)
 		idx.tools[toolID] = record
-		idx.namespaces[tool.Namespace] = struct{}{}
+		idx.addNamespaceLocked(tool.Namespace)
 	} else {
 		// Check MCP field consistency: new tool's MCP fields must match existing
 		if !toolMCPFieldsEqual(record.tool, tool) {
 			return fmt.Errorf("%w: tool %q MCP fields differ from existing registration", ErrInvalidTool, toolID)
+		}
+
+		// Track namespace changes if tool is re-registered under a new namespace.
+		if record.tool.Namespace != tool.Namespace {
+			idx.removeNamespaceLocked(record.tool.Namespace)
+			idx.addNamespaceLocked(tool.Namespace)
 		}
 
 		// Update toolmodel extensions (Tags) - these are allowed to differ
@@ -603,18 +635,7 @@ func (idx *InMemoryIndex) UnregisterBackend(toolID string, kind toolmodel.Backen
 	if len(record.backends) == 0 {
 		namespace := record.tool.Namespace
 		delete(idx.tools, toolID)
-
-		// Check if namespace still has tools
-		hasNamespace := false
-		for _, r := range idx.tools {
-			if r.tool.Namespace == namespace {
-				hasNamespace = true
-				break
-			}
-		}
-		if !hasNamespace {
-			delete(idx.namespaces, namespace)
-		}
+		idx.removeNamespaceLocked(namespace)
 	}
 
 	idx.markSearchDocsDirtyLocked()

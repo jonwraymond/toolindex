@@ -659,6 +659,14 @@ func TestUnregisterBackend_LastBackendRemovesTool(t *testing.T) {
 	if !errors.Is(err, ErrNotFound) {
 		t.Errorf("expected ErrNotFound after removing last backend, got %v", err)
 	}
+
+	namespaces, err := idx.ListNamespaces()
+	if err != nil {
+		t.Fatalf("ListNamespaces failed: %v", err)
+	}
+	if len(namespaces) != 0 {
+		t.Errorf("expected 0 namespaces after removing last tool, got %d", len(namespaces))
+	}
 }
 
 func TestUnregisterBackend_NotFound(t *testing.T) {

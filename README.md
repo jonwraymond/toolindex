@@ -1,5 +1,7 @@
 # toolindex
 
+[![Docs](https://img.shields.io/badge/docs-ai--tools--stack-blue)](https://jonwraymond.github.io/ai-tools-stack/)
+
 `toolindex` is the global registry + progressive discovery layer for tools.
 It ingests `toolmodel.Tool` plus `toolmodel.ToolBackend` bindings and provides:
 - canonical lookup by tool ID, and

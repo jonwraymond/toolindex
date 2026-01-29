@@ -7,6 +7,6 @@
 - `toolcode`: `v0.3.0`
 - `toolruntime`: `v0.2.1`
 - `toolsearch`: `v0.3.0`
-- `metatools-mcp`: `v0.3.0`
+- `metatools-mcp`: `v0.4.0`
 
 Generated from `ai-tools-stack/go.mod`.

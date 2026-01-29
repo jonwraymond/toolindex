@@ -74,6 +74,13 @@ summaries, _ := idx.Search("repo metadata", 5)
 for _, s := range summaries {
   fmt.Println(s.ID, s.ShortDescription)
 }
+
+// Cursor pagination (optional)
+page, nextCursor, _ := idx.SearchPage("repo metadata", 20, "")
+_ = page
+if nextCursor != "" {
+  _, _, _ = idx.SearchPage("repo metadata", 20, nextCursor)
+}
 ```
 
 Resolve a tool for execution:

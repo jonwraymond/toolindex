@@ -1384,6 +1384,9 @@ func TestErrorValues(t *testing.T) {
 	if ErrInvalidBackend == nil {
 		t.Error("ErrInvalidBackend should be defined")
 	}
+	if ErrInvalidCursor == nil {
+		t.Error("ErrInvalidCursor should be defined")
+	}
 
 	// Should be distinct
 	if errors.Is(ErrNotFound, ErrInvalidTool) {
@@ -1394,6 +1397,9 @@ func TestErrorValues(t *testing.T) {
 	}
 	if errors.Is(ErrInvalidTool, ErrInvalidBackend) {
 		t.Error("ErrInvalidTool and ErrInvalidBackend should be distinct")
+	}
+	if errors.Is(ErrInvalidCursor, ErrInvalidTool) || errors.Is(ErrInvalidCursor, ErrInvalidBackend) || errors.Is(ErrInvalidCursor, ErrNotFound) {
+		t.Error("ErrInvalidCursor should be distinct")
 	}
 }
 
@@ -1588,5 +1594,108 @@ func TestSearchDocs_DerivedFieldsRefreshOnUpdate(t *testing.T) {
 	// DocText should now include "newtag"
 	if !strings.Contains(receivedDocs[0].DocText, "newtag") {
 		t.Errorf("expected docText to contain 'newtag' after update, got %q", receivedDocs[0].DocText)
+	}
+}
+
+// ============================================================
+// Tests for Cursor Pagination
+// ============================================================
+
+func TestSearchPage_PaginatesWithCursor(t *testing.T) {
+	idx := NewInMemoryIndex()
+
+	mustRegister(t, idx, makeTestTool("alpha", "ns1", "alpha tool", nil), makeLocalBackend("alpha"))
+	mustRegister(t, idx, makeTestTool("beta", "ns1", "beta tool", nil), makeLocalBackend("beta"))
+	mustRegister(t, idx, makeTestTool("gamma", "ns2", "gamma tool", nil), makeLocalBackend("gamma"))
+
+	results, cursor, err := idx.SearchPage("", 2, "")
+	if err != nil {
+		t.Fatalf("SearchPage failed: %v", err)
+	}
+	if len(results) != 2 {
+		t.Fatalf("expected 2 results, got %d", len(results))
+	}
+	if cursor == "" {
+		t.Fatal("expected next cursor")
+	}
+	if results[0].ID != "ns1:alpha" || results[1].ID != "ns1:beta" {
+		t.Fatalf("unexpected ordering: %q, %q", results[0].ID, results[1].ID)
+	}
+
+	nextResults, nextCursor, err := idx.SearchPage("", 2, cursor)
+	if err != nil {
+		t.Fatalf("SearchPage with cursor failed: %v", err)
+	}
+	if len(nextResults) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(nextResults))
+	}
+	if nextCursor != "" {
+		t.Fatalf("expected empty cursor, got %q", nextCursor)
+	}
+	if nextResults[0].ID != "ns2:gamma" {
+		t.Fatalf("expected ns2:gamma, got %q", nextResults[0].ID)
+	}
+}
+
+func TestSearchPage_InvalidCursor(t *testing.T) {
+	idx := NewInMemoryIndex()
+	mustRegister(t, idx, makeTestTool("alpha", "ns1", "alpha tool", nil), makeLocalBackend("alpha"))
+
+	_, _, err := idx.SearchPage("", 1, "not-base64")
+	if !errors.Is(err, ErrInvalidCursor) {
+		t.Fatalf("expected ErrInvalidCursor, got %v", err)
+	}
+}
+
+func TestSearchPage_StaleCursor(t *testing.T) {
+	idx := NewInMemoryIndex()
+	mustRegister(t, idx, makeTestTool("alpha", "ns1", "alpha tool", nil), makeLocalBackend("alpha"))
+	mustRegister(t, idx, makeTestTool("beta", "ns1", "beta tool", nil), makeLocalBackend("beta"))
+
+	_, cursor, err := idx.SearchPage("", 1, "")
+	if err != nil {
+		t.Fatalf("SearchPage failed: %v", err)
+	}
+
+	mustRegister(t, idx, makeTestTool("gamma", "ns2", "gamma tool", nil), makeLocalBackend("gamma"))
+
+	_, _, err = idx.SearchPage("", 1, cursor)
+	if !errors.Is(err, ErrInvalidCursor) {
+		t.Fatalf("expected ErrInvalidCursor, got %v", err)
+	}
+}
+
+func TestListNamespacesPage_PaginatesWithCursor(t *testing.T) {
+	idx := NewInMemoryIndex()
+	mustRegister(t, idx, makeTestTool("alpha", "ns1", "alpha tool", nil), makeLocalBackend("alpha"))
+	mustRegister(t, idx, makeTestTool("beta", "ns2", "beta tool", nil), makeLocalBackend("beta"))
+	mustRegister(t, idx, makeTestTool("gamma", "ns3", "gamma tool", nil), makeLocalBackend("gamma"))
+
+	namespaces, cursor, err := idx.ListNamespacesPage(2, "")
+	if err != nil {
+		t.Fatalf("ListNamespacesPage failed: %v", err)
+	}
+	if len(namespaces) != 2 {
+		t.Fatalf("expected 2 namespaces, got %d", len(namespaces))
+	}
+	if cursor == "" {
+		t.Fatal("expected next cursor")
+	}
+	if namespaces[0] != "ns1" || namespaces[1] != "ns2" {
+		t.Fatalf("unexpected namespaces: %v", namespaces)
+	}
+
+	nextNamespaces, nextCursor, err := idx.ListNamespacesPage(2, cursor)
+	if err != nil {
+		t.Fatalf("ListNamespacesPage with cursor failed: %v", err)
+	}
+	if len(nextNamespaces) != 1 {
+		t.Fatalf("expected 1 namespace, got %d", len(nextNamespaces))
+	}
+	if nextCursor != "" {
+		t.Fatalf("expected empty cursor, got %q", nextCursor)
+	}
+	if nextNamespaces[0] != "ns3" {
+		t.Fatalf("expected ns3, got %q", nextNamespaces[0])
 	}
 }

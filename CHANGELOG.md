@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.3.0](https://github.com/jonwraymond/toolindex/compare/toolindex-v0.2.0...toolindex-v0.3.0) (2026-01-29)
+
+
+### Features
+
+* enforce deterministic searcher for pagination ([962da40](https://github.com/jonwraymond/toolindex/commit/962da40e72df6a5ad07d993f44824e965a1108b2))
+* **mcp:** add cursor-based pagination ([5f0f95c](https://github.com/jonwraymond/toolindex/commit/5f0f95ca326643b5a789251e516e874af3e9dc7c))
+* **mcp:** add cursor-based pagination ([88d0a81](https://github.com/jonwraymond/toolindex/commit/88d0a8123a2eab3ed71720d616715999f21e7c89))
+
 ## [Unreleased]
 
 ### Added

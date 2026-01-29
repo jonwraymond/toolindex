@@ -20,6 +20,32 @@ if err != nil {
 }
 ```
 
+## Search with cursor pagination
+
+```go
+summaries, nextCursor, err := idx.SearchPage("repo metadata", 20, "")
+if err != nil {
+  // handle error
+}
+if nextCursor != "" {
+  nextPage, _, _ := idx.SearchPage("repo metadata", 20, nextCursor)
+  _ = nextPage
+}
+```
+
+## List namespaces with cursor pagination
+
+```go
+namespaces, nextCursor, err := idx.ListNamespacesPage(50, "")
+if err != nil {
+  // handle error
+}
+if nextCursor != "" {
+  nextPage, _, _ := idx.ListNamespacesPage(50, nextCursor)
+  _ = nextPage
+}
+```
+
 ## Lookup and backends
 
 ```go

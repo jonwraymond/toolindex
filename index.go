@@ -24,6 +24,7 @@ var (
 	ErrNotFound       = errors.New("tool not found")
 	ErrInvalidTool    = errors.New("invalid tool")
 	ErrInvalidBackend = errors.New("invalid backend")
+	ErrInvalidCursor  = errors.New("invalid cursor")
 )
 
 // Summary represents a lightweight view of a tool for search results.
@@ -61,7 +62,9 @@ type Index interface {
 
 	// Discovery
 	Search(query string, limit int) ([]Summary, error)
+	SearchPage(query string, limit int, cursor string) ([]Summary, string, error)
 	ListNamespaces() ([]string, error)
+	ListNamespacesPage(limit int, cursor string) ([]string, string, error)
 }
 
 // ToolRegistration pairs a tool with its backend for batch registration.
@@ -801,24 +804,27 @@ func (idx *InMemoryIndex) GetAllBackends(id string) ([]toolmodel.ToolBackend, er
 
 // Search performs a search over the indexed tools.
 func (idx *InMemoryIndex) Search(query string, limit int) ([]Summary, error) {
-	// Fast path: serve a cached snapshot under a read lock.
-	idx.mu.RLock()
-	if !idx.searchDocsDirty && idx.searchDocs != nil && idx.searchDocsVersion == idx.indexVersion {
-		docs := make([]SearchDoc, len(idx.searchDocs))
-		copy(docs, idx.searchDocs)
-		idx.mu.RUnlock()
-		return idx.searcher.Search(query, limit, docs)
-	}
-	idx.mu.RUnlock()
-
-	// Slow path: rebuild the cache under an exclusive lock.
-	idx.mu.Lock()
-	idx.ensureSearchDocsLocked()
-	docs := make([]SearchDoc, len(idx.searchDocs))
-	copy(docs, idx.searchDocs)
-	idx.mu.Unlock()
-
+	docs, _ := idx.snapshotSearchDocs()
 	return idx.searcher.Search(query, limit, docs)
+}
+
+// SearchPage performs a search over the indexed tools with cursor pagination.
+func (idx *InMemoryIndex) SearchPage(query string, limit int, cursor string) ([]Summary, string, error) {
+	if limit <= 0 {
+		return nil, "", fmt.Errorf("limit must be positive")
+	}
+
+	docs, version := idx.snapshotSearchDocs()
+	results, err := idx.searcher.Search(query, len(docs), docs)
+	if err != nil {
+		return nil, "", err
+	}
+
+	page, nextCursor, err := paginateResults(results, limit, cursor, version)
+	if err != nil {
+		return nil, "", err
+	}
+	return page, nextCursor, nil
 }
 
 // ensureSearchDocsLocked rebuilds the search docs cache if dirty.
@@ -828,6 +834,29 @@ func (idx *InMemoryIndex) ensureSearchDocsLocked() {
 		return
 	}
 	idx.rebuildSearchDocsLocked()
+}
+
+func (idx *InMemoryIndex) snapshotSearchDocs() ([]SearchDoc, uint64) {
+	// Fast path: serve a cached snapshot under a read lock.
+	idx.mu.RLock()
+	if !idx.searchDocsDirty && idx.searchDocs != nil && idx.searchDocsVersion == idx.indexVersion {
+		docs := make([]SearchDoc, len(idx.searchDocs))
+		copy(docs, idx.searchDocs)
+		version := idx.searchDocsVersion
+		idx.mu.RUnlock()
+		return docs, version
+	}
+	idx.mu.RUnlock()
+
+	// Slow path: rebuild the cache under an exclusive lock.
+	idx.mu.Lock()
+	idx.ensureSearchDocsLocked()
+	docs := make([]SearchDoc, len(idx.searchDocs))
+	copy(docs, idx.searchDocs)
+	version := idx.searchDocsVersion
+	idx.mu.Unlock()
+
+	return docs, version
 }
 
 // rebuildSearchDocsLocked rebuilds the search docs from scratch.
@@ -886,6 +915,28 @@ func (idx *InMemoryIndex) ListNamespaces() ([]string, error) {
 	}
 	sort.Strings(result)
 	return result, nil
+}
+
+// ListNamespacesPage returns namespaces with cursor pagination.
+func (idx *InMemoryIndex) ListNamespacesPage(limit int, cursor string) ([]string, string, error) {
+	if limit <= 0 {
+		return nil, "", fmt.Errorf("limit must be positive")
+	}
+
+	idx.mu.RLock()
+	version := idx.indexVersion
+	result := make([]string, 0, len(idx.namespaces))
+	for ns := range idx.namespaces {
+		result = append(result, ns)
+	}
+	idx.mu.RUnlock()
+
+	sort.Strings(result)
+	page, nextCursor, err := paginateResults(result, limit, cursor, version)
+	if err != nil {
+		return nil, "", err
+	}
+	return page, nextCursor, nil
 }
 
 // refreshRecordDerived recomputes cached derived fields for a tool record.
@@ -975,8 +1026,11 @@ func (s *lexicalSearcher) Search(query string, limit int, docs []SearchDoc) ([]S
 		}
 	}
 
-	// Sort by score descending
+	// Sort by score descending, then ID ascending for deterministic pagination.
 	sort.Slice(scored, func(i, j int) bool {
+		if scored[i].score == scored[j].score {
+			return scored[i].summary.ID < scored[j].summary.ID
+		}
 		return scored[i].score > scored[j].score
 	})
 

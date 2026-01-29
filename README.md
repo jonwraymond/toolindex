@@ -16,6 +16,10 @@ This module sits directly on top of `toolmodel` and is used by `tooldocs`,
 go get github.com/jonwraymond/toolindex
 ```
 
+## Changelog
+
+See `CHANGELOG.md` for release notes.
+
 ## Core behaviors
 
 - Canonical IDs come from `Tool.ToolID()` (`namespace:name`)
@@ -73,6 +77,13 @@ if err := idx.RegisterTool(tool, backend); err != nil {
 summaries, _ := idx.Search("repo metadata", 5)
 for _, s := range summaries {
   fmt.Println(s.ID, s.ShortDescription)
+}
+
+// Cursor pagination (optional)
+page, nextCursor, _ := idx.SearchPage("repo metadata", 20, "")
+_ = page
+if nextCursor != "" {
+  _, _, _ = idx.SearchPage("repo metadata", 20, nextCursor)
 }
 ```
 

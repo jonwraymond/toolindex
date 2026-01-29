@@ -14,7 +14,9 @@ type Index interface {
   GetAllBackends(id string) ([]toolmodel.ToolBackend, error)
 
   Search(query string, limit int) ([]Summary, error)
+  SearchPage(query string, limit int, cursor string) ([]Summary, string, error)
   ListNamespaces() ([]string, error)
+  ListNamespacesPage(limit int, cursor string) ([]string, string, error)
 }
 ```
 
@@ -100,3 +102,4 @@ type BackendSelector func([]toolmodel.ToolBackend) toolmodel.ToolBackend
 - `ErrNotFound`
 - `ErrInvalidTool`
 - `ErrInvalidBackend`
+- `ErrInvalidCursor`

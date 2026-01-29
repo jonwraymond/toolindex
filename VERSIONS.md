@@ -1,12 +1,12 @@
 ## Version compatibility (current tags)
 
 - `toolmodel`: `v0.1.3`
-- `toolindex`: `v0.2.1`
+- `toolindex`: `v0.3.0`
 - `tooldocs`: `v0.1.11`
-- `toolrun`: `v0.2.1`
-- `toolcode`: `v0.1.11`
-- `toolruntime`: `v0.1.11`
-- `toolsearch`: `v0.1.10`
-- `metatools-mcp`: `v0.2.1`
+- `toolrun`: `v0.3.0`
+- `toolcode`: `v0.3.0`
+- `toolruntime`: `v0.2.1`
+- `toolsearch`: `v0.3.0`
+- `metatools-mcp`: `v0.3.0`
 
 Generated from `ai-tools-stack/go.mod`.

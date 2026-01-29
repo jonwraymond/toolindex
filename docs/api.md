@@ -79,6 +79,12 @@ type Searcher interface {
   Search(query string, limit int, docs []SearchDoc) ([]Summary, error)
 }
 
+// Optional deterministic marker for cursor pagination
+type DeterministicSearcher interface {
+  Searcher
+  Deterministic() bool
+}
+
 type SearchDoc struct {
   ID      string
   DocText string
@@ -92,6 +98,7 @@ type SearchDoc struct {
 type IndexOptions struct {
   BackendSelector BackendSelector
   Searcher        Searcher
+  RequireDeterministicSearcher *bool
 }
 
 type BackendSelector func([]toolmodel.ToolBackend) toolmodel.ToolBackend

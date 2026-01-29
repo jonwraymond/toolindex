@@ -21,10 +21,11 @@ const MaxShortDescriptionLen = 120
 
 // Error values for consistent error handling by callers.
 var (
-	ErrNotFound       = errors.New("tool not found")
-	ErrInvalidTool    = errors.New("invalid tool")
-	ErrInvalidBackend = errors.New("invalid backend")
-	ErrInvalidCursor  = errors.New("invalid cursor")
+	ErrNotFound                 = errors.New("tool not found")
+	ErrInvalidTool              = errors.New("invalid tool")
+	ErrInvalidBackend           = errors.New("invalid backend")
+	ErrInvalidCursor            = errors.New("invalid cursor")
+	ErrNonDeterministicSearcher = errors.New("searcher is non-deterministic")
 )
 
 // Summary represents a lightweight view of a tool for search results.
@@ -78,7 +79,17 @@ type BackendSelector func([]toolmodel.ToolBackend) toolmodel.ToolBackend
 
 // Searcher is the interface for search implementations.
 type Searcher interface {
+	// Search returns summaries ordered by relevance.
+	// When used with SearchPage, the ordering must be deterministic for the same
+	// docs/query input to guarantee cursor stability.
 	Search(query string, limit int, docs []SearchDoc) ([]Summary, error)
+}
+
+// DeterministicSearcher indicates whether a searcher provides deterministic ordering.
+// Deterministic ordering is required for cursor pagination to be stable.
+type DeterministicSearcher interface {
+	Searcher
+	Deterministic() bool
 }
 
 // ChangeType describes a mutation event in the index.
@@ -117,6 +128,10 @@ type Refresher interface {
 type IndexOptions struct {
 	BackendSelector BackendSelector
 	Searcher        Searcher
+	// RequireDeterministicSearcher enforces deterministic ordering for pagination.
+	// When true, SearchPage returns ErrNonDeterministicSearcher if the configured
+	// searcher does not declare deterministic ordering.
+	RequireDeterministicSearcher *bool
 }
 
 // toolRecord holds all data for a single registered tool.
@@ -146,6 +161,8 @@ type InMemoryIndex struct {
 	searchDocsVersion uint64
 	indexVersion      uint64
 	searchDocsBuilds  int // for test visibility
+
+	requireDeterministicSearcher bool
 }
 
 type listenerEntry struct {
@@ -156,11 +173,12 @@ type listenerEntry struct {
 // NewInMemoryIndex creates a new in-memory tool index.
 func NewInMemoryIndex(opts ...IndexOptions) *InMemoryIndex {
 	idx := &InMemoryIndex{
-		tools:           make(map[string]*toolRecord),
-		namespaces:      make(map[string]struct{}),
-		namespaceCounts: make(map[string]int),
-		backendSelector: DefaultBackendSelector,
-		searcher:        &lexicalSearcher{},
+		tools:                        make(map[string]*toolRecord),
+		namespaces:                   make(map[string]struct{}),
+		namespaceCounts:              make(map[string]int),
+		backendSelector:              DefaultBackendSelector,
+		searcher:                     &lexicalSearcher{},
+		requireDeterministicSearcher: true,
 	}
 
 	if len(opts) > 0 {
@@ -170,6 +188,9 @@ func NewInMemoryIndex(opts ...IndexOptions) *InMemoryIndex {
 		}
 		if opt.Searcher != nil {
 			idx.searcher = opt.Searcher
+		}
+		if opt.RequireDeterministicSearcher != nil {
+			idx.requireDeterministicSearcher = *opt.RequireDeterministicSearcher
 		}
 	}
 
@@ -815,6 +836,12 @@ func (idx *InMemoryIndex) SearchPage(query string, limit int, cursor string) ([]
 	}
 
 	docs, version := idx.snapshotSearchDocs()
+
+	if idx.requireDeterministicSearcher {
+		if ds, ok := idx.searcher.(DeterministicSearcher); !ok || !ds.Deterministic() {
+			return nil, "", ErrNonDeterministicSearcher
+		}
+	}
 	results, err := idx.searcher.Search(query, len(docs), docs)
 	if err != nil {
 		return nil, "", err
@@ -974,6 +1001,11 @@ func buildSummary(tool toolmodel.Tool, normalizedTags []string) Summary {
 
 // lexicalSearcher is the default search implementation using simple lexical matching.
 type lexicalSearcher struct{}
+
+// Deterministic reports whether this searcher returns stable ordering.
+func (s *lexicalSearcher) Deterministic() bool {
+	return true
+}
 
 // scoredResult holds a result with its score for ranking.
 type scoredResult struct {

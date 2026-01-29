@@ -69,5 +69,6 @@ _ = idx.RegisterToolsFromMCP("github", []toolmodel.Tool{toolA, toolB})
 idx := toolindex.NewInMemoryIndex(toolindex.IndexOptions{
   BackendSelector: mySelector,
   Searcher:        mySearcher,
+  // RequireDeterministicSearcher: boolPtr(true), // enforce stable pagination
 })
 ```

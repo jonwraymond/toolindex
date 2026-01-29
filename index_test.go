@@ -1655,6 +1655,39 @@ func TestSearchPage_DeterministicOrderForEqualScore(t *testing.T) {
 	}
 }
 
+type nondeterministicSearcher struct{}
+
+func (s *nondeterministicSearcher) Search(_ string, _ int, docs []SearchDoc) ([]Summary, error) {
+	results := make([]Summary, len(docs))
+	for i, doc := range docs {
+		results[i] = doc.Summary
+	}
+	return results, nil
+}
+
+func (s *nondeterministicSearcher) Deterministic() bool {
+	return false
+}
+
+func TestSearchPage_RequiresDeterministicSearcher(t *testing.T) {
+	requireDeterministic := true
+	idx := NewInMemoryIndex(IndexOptions{
+		Searcher:                     &nondeterministicSearcher{},
+		RequireDeterministicSearcher: &requireDeterministic,
+	})
+
+	tool := makeTestTool("alpha", "ns", "alpha tool", nil)
+	backend := makeLocalBackend("handler")
+	if err := idx.RegisterTool(tool, backend); err != nil {
+		t.Fatalf("RegisterTool failed: %v", err)
+	}
+
+	_, _, err := idx.SearchPage("alpha", 10, "")
+	if !errors.Is(err, ErrNonDeterministicSearcher) {
+		t.Fatalf("SearchPage error = %v, want ErrNonDeterministicSearcher", err)
+	}
+}
+
 func TestSearchPage_InvalidCursor(t *testing.T) {
 	idx := NewInMemoryIndex()
 	mustRegister(t, idx, makeTestTool("alpha", "ns1", "alpha tool", nil), makeLocalBackend("alpha"))

@@ -105,7 +105,7 @@ fmt.Println(defaultBackend.Kind, len(allBackends))
 
 `NewInMemoryIndex` supports optional overrides:
 - `BackendSelector` (choose a different default backend policy)
-- `Searcher` (replace lexical search with another strategy)
+- `Searcher` (replace lexical search with another strategy; cursor pagination assumes deterministic ordering)
 
 These are provided via `toolindex.IndexOptions`.
 

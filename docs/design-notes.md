@@ -6,7 +6,7 @@ This page captures the tradeoffs and error semantics behind `toolindex`.
 
 - **In-memory first.** `InMemoryIndex` favors low latency and zero dependencies. It trades persistence for speed and simplicity (persistence can be added later behind the same `Index` interface).
 - **Progressive disclosure.** Search returns summaries only; full schemas stay out of the discovery path to keep token costs low.
-- **Deterministic behavior.** Search docs are cached and sorted by tool ID to keep results reproducible across runs; cursor pagination validates against index versioning and ties are broken by ID for stable paging.
+- **Deterministic behavior.** Search docs are cached and sorted by tool ID to keep results reproducible across runs; cursor pagination validates against index versioning and requires deterministic ordering from the configured searcher.
 - **Protocol-agnostic backends.** Backends are stored as metadata only; the index does not execute tools or depend on transport details.
 - **MCP-field consistency check.** If multiple backends register the same tool ID, the MCP tool fields must match. This prevents silent divergence across backends.
 - **Pluggable search.** `Searcher` allows swapping lexical search with BM25 or semantic search without changing the index API.
@@ -19,6 +19,7 @@ This page captures the tradeoffs and error semantics behind `toolindex`.
 - `ErrInvalidTool` – tool validation failed (delegates to `toolmodel.Tool.Validate`).
 - `ErrInvalidBackend` – backend is missing required fields for its kind.
 - `ErrInvalidCursor` – cursor tokens are malformed or stale.
+- `ErrNonDeterministicSearcher` – pagination requested with a non-deterministic searcher.
 
 ### Registration failures
 

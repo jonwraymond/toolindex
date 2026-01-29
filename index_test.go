@@ -1637,6 +1637,24 @@ func TestSearchPage_PaginatesWithCursor(t *testing.T) {
 	}
 }
 
+func TestSearchPage_DeterministicOrderForEqualScore(t *testing.T) {
+	idx := NewInMemoryIndex()
+
+	mustRegister(t, idx, makeTestTool("beta", "ns1", "shared description", nil), makeLocalBackend("beta"))
+	mustRegister(t, idx, makeTestTool("alpha", "ns1", "shared description", nil), makeLocalBackend("alpha"))
+
+	results, _, err := idx.SearchPage("shared", 10, "")
+	if err != nil {
+		t.Fatalf("SearchPage failed: %v", err)
+	}
+	if len(results) != 2 {
+		t.Fatalf("expected 2 results, got %d", len(results))
+	}
+	if results[0].ID != "ns1:alpha" || results[1].ID != "ns1:beta" {
+		t.Fatalf("expected deterministic ID order, got %q then %q", results[0].ID, results[1].ID)
+	}
+}
+
 func TestSearchPage_InvalidCursor(t *testing.T) {
 	idx := NewInMemoryIndex()
 	mustRegister(t, idx, makeTestTool("alpha", "ns1", "alpha tool", nil), makeLocalBackend("alpha"))

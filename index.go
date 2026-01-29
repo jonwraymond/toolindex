@@ -1026,8 +1026,11 @@ func (s *lexicalSearcher) Search(query string, limit int, docs []SearchDoc) ([]S
 		}
 	}
 
-	// Sort by score descending
+	// Sort by score descending, then ID ascending for deterministic pagination.
 	sort.Slice(scored, func(i, j int) bool {
+		if scored[i].score == scored[j].score {
+			return scored[i].summary.ID < scored[j].summary.ID
+		}
 		return scored[i].score > scored[j].score
 	})
 

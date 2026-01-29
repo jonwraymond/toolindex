@@ -16,6 +16,10 @@ This module sits directly on top of `toolmodel` and is used by `tooldocs`,
 go get github.com/jonwraymond/toolindex
 ```
 
+## Changelog
+
+See `CHANGELOG.md` for release notes.
+
 ## Core behaviors
 
 - Canonical IDs come from `Tool.ToolID()` (`namespace:name`)

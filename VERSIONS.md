@@ -12,6 +12,7 @@
 - `toolobserve`: `v0.2.0`
 - `toolcache`: `v0.2.0`
 - `toolsemantic`: `v0.2.0`
+- `toolskill`: `v0.2.0`
 - `metatools-mcp`: `v0.4.0`
 
 Generated from `ai-tools-stack/go.mod`.

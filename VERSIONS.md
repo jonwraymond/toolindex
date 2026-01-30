@@ -7,7 +7,7 @@
 - `tooldocs`: `v0.2.0`
 - `toolrun`: `v0.3.0`
 - `toolcode`: `v0.3.0`
-- `toolruntime`: `v0.2.1`
+- `toolruntime`: `v0.3.1`
 - `toolsearch`: `v0.3.0`
 - `toolobserve`: `v0.2.0`
 - `toolcache`: `v0.2.0`

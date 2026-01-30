@@ -1,39 +1,134 @@
+# toolindex User Journey
+# Registry and discovery workflow
+
 direction: down
 
-style: { font-size: 14 }
-
-loader: "Tool Loader" {
-  shape: oval
+vars: {
+  d2-config: {
+    layout-engine: elk
+    theme-id: 0
+  }
+  discovery-fill: "#3182ce"
+  surface-fill: "#2b6cb0"
+  execution-fill: "#38a169"
+  actor-fill: "#e2e8f0"
 }
 
-agent: "Agent" {
-  shape: oval
+classes: {
+  actor: {
+    style: {
+      fill: ${actor-fill}
+      stroke: "#a0aec0"
+      stroke-width: 2
+      font-color: "#1a202c"
+      bold: true
+    }
+  }
+  discovery: {
+    style: {
+      fill: ${discovery-fill}
+      stroke: "#2c5282"
+      stroke-width: 2
+      font-color: "#fff"
+      shadow: true
+    }
+  }
+  surface: {
+    style: {
+      fill: ${surface-fill}
+      stroke: "#1a365d"
+      stroke-width: 2
+      font-color: "#fff"
+    }
+  }
+  execution: {
+    style: {
+      fill: ${execution-fill}
+      stroke: "#276749"
+      stroke-width: 2
+      font-color: "#fff"
+    }
+  }
+  loader-flow: {
+    style: {
+      stroke: ${discovery-fill}
+      stroke-width: 2
+    }
+  }
+  agent-flow: {
+    style: {
+      stroke: ${surface-fill}
+      stroke-width: 2
+    }
+  }
 }
 
-index: "toolindex" {
+# Title
+title: "toolindex - Registry & Discovery" {
+  shape: text
+  near: top-center
+  style: {
+    font-size: 24
+    bold: true
+    font-color: "#1a365d"
+  }
+}
+
+# Actors
+loader: "⬆️ Tool Loader" {
+  shape: person
+  class: actor
+}
+
+agent: "🤖 Agent" {
+  shape: person
+  class: actor
+}
+
+# Components
+index: "🗂️ toolindex\nRegistry" {
   shape: cylinder
-  style: { shadow: true }
+  class: discovery
 }
 
-metatools: "metatools-mcp" {
+metatools: "🔷 metatools-mcp\nMCP Surface" {
   shape: hexagon
+  class: surface
 }
 
-docs: "tooldocs" {
+docs: "📚 tooldocs\nDocumentation" {
   shape: document
+  class: discovery
 }
 
-runner: "toolrun" {
+runner: "▶️ toolrun\nExecution" {
   shape: step
+  class: execution
 }
 
-loader -> index: "RegisterTools"
+# Loader Flow
+loader -> index: "RegisterTools" {
+  class: loader-flow
+}
 
-agent -> metatools: "search_tools(query)"
-metatools -> index: "Search"
+# Agent Flow
+agent -> metatools: "search_tools(query)" {
+  class: agent-flow
+}
+metatools -> index: "Search" {
+  class: agent-flow
+}
 
-agent -> metatools: "describe_tool(tool_id)"
-metatools -> docs: "DescribeTool"
+agent -> metatools: "describe_tool(tool_id)" {
+  class: agent-flow
+}
+metatools -> docs: "DescribeTool" {
+  class: agent-flow
+}
 
-agent -> metatools: "run_tool(tool_id, args)"
-metatools -> runner: "Run"
+agent -> metatools: "run_tool(tool_id, args)" {
+  class: agent-flow
+}
+metatools -> runner: "Run" {
+  class: agent-flow
+}

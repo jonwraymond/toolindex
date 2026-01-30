@@ -1,6 +1,131 @@
+# toolindex Registration & Search Flow
+# Tool registration and discovery pipeline
+
 direction: right
 
-"RegisterTool(s)" -> "toolRecord map" -> "SearchDoc cache" -> Searcher -> "Summary list"
+vars: {
+  d2-config: {
+    layout-engine: elk
+    theme-id: 0
+  }
+  discovery-fill: "#3182ce"
+  storage-fill: "#718096"
+  search-fill: "#d69e2e"
+  output-fill: "#38a169"
+}
 
-"toolRecord map" -> GetTool
-"toolRecord map" -> ListNamespaces
+classes: {
+  input-node: {
+    style: {
+      fill: ${discovery-fill}
+      stroke: "#2c5282"
+      stroke-width: 2
+      font-color: "#fff"
+    }
+  }
+  storage-node: {
+    style: {
+      fill: ${storage-fill}
+      stroke: "#4a5568"
+      stroke-width: 2
+      font-color: "#fff"
+    }
+  }
+  search-node: {
+    style: {
+      fill: ${search-fill}
+      stroke: "#b7791f"
+      stroke-width: 2
+      font-color: "#fff"
+    }
+  }
+  output-node: {
+    style: {
+      fill: ${output-fill}
+      stroke: "#276749"
+      stroke-width: 2
+      font-color: "#fff"
+    }
+  }
+  data-flow: {
+    style: {
+      stroke: "#4a5568"
+      stroke-width: 2
+    }
+  }
+  search-flow: {
+    style: {
+      stroke: ${search-fill}
+      stroke-width: 2
+    }
+  }
+}
+
+# Title
+title: "toolindex - Registration & Search" {
+  shape: text
+  near: top-center
+  style: {
+    font-size: 24
+    bold: true
+    font-color: "#1a365d"
+  }
+}
+
+# Registration Path
+register: "📥 RegisterTool(s)\nBulk Registration" {
+  shape: step
+  class: input-node
+}
+
+records: "🗄️ toolRecord map\nIn-Memory Store" {
+  shape: cylinder
+  class: storage-node
+}
+
+cache: "📋 SearchDoc cache\nIndexable Docs" {
+  shape: document
+  class: storage-node
+}
+
+searcher: "🔍 Searcher\nBM25/Semantic" {
+  shape: diamond
+  class: search-node
+}
+
+summaries: "✅ Summary list\nRanked Results" {
+  shape: document
+  class: output-node
+}
+
+# Query Paths
+get_tool: "GetTool\nFull Definition" {
+  shape: step
+  class: output-node
+}
+
+list_ns: "ListNamespaces\nAll Namespaces" {
+  shape: step
+  class: output-node
+}
+
+# Flow
+register -> records: "store" {
+  class: data-flow
+}
+records -> cache: "index" {
+  class: data-flow
+}
+cache -> searcher: "search" {
+  class: search-flow
+}
+searcher -> summaries: "rank" {
+  class: search-flow
+}
+
+records -> get_tool: "lookup" {
+  class: data-flow
+}
+records -> list_ns: "enumerate" {
+  class: data-flow
+}

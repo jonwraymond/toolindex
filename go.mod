@@ -3,7 +3,7 @@ module github.com/jonwraymond/toolindex
 go 1.24.4
 
 require (
-	github.com/jonwraymond/toolmodel v0.1.3
+	github.com/jonwraymond/toolmodel v0.2.0
 	github.com/modelcontextprotocol/go-sdk v1.2.0
 )
 

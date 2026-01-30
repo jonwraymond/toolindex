@@ -20,6 +20,15 @@ type Index interface {
 }
 ```
 
+### Index contract
+
+- Concurrency: implementations are safe for concurrent use.
+- Errors: use `errors.Is` with `ErrInvalidTool`, `ErrInvalidBackend`, `ErrNotFound`,
+  `ErrInvalidCursor`, and `ErrNonDeterministicSearcher`.
+- Ownership: returned slices are caller-owned; elements are read-only snapshots.
+- Determinism: search and namespace listings must return stable ordering.
+- Nil/zero: `SearchPage` requires `limit > 0`; empty inputs are treated as no-ops.
+
 ## Change notifications (optional)
 
 ```go
@@ -50,6 +59,11 @@ type Refresher interface {
   Refresh() uint64
 }
 ```
+
+### ChangeNotifier/Refresher contract
+
+- `OnChange` returns a non-nil unsubscribe func; it is safe to call multiple times.
+- `Refresh` returns a monotonic version and is safe for concurrent use.
 
 ## Summary
 
@@ -91,6 +105,12 @@ type SearchDoc struct {
   Summary Summary
 }
 ```
+
+### Searcher contract
+
+- Concurrency: implementations should be safe for concurrent use or documented otherwise.
+- Determinism: stable ordering required for cursor pagination; use deterministic tie-breaks.
+- Nil/zero: `limit <= 0` should return an empty result set.
 
 ## Options
 

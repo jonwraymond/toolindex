@@ -1,6 +1,6 @@
 # PRD-001 Interface Contracts — toolindex
 
-**Status:** Draft
+**Status:** Done
 **Date:** 2026-01-30
 
 
@@ -41,4 +41,3 @@ Define explicit interface contracts (GoDoc + documented semantics) for all inter
 - All interfaces have GoDoc with explicit behavioral contract.
 - Contract tests exist and pass.
 - No interface contract contradictions across repos.
-

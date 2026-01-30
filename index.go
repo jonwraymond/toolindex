@@ -48,6 +48,17 @@ type SearchDoc struct {
 }
 
 // Index defines the interface for a tool registry.
+//
+// Contract:
+// - Concurrency: implementations must be safe for concurrent use.
+// - Errors: validation failures should return ErrInvalidTool/ErrInvalidBackend;
+//   missing tools/backends should return ErrNotFound; cursor issues should return
+//   ErrInvalidCursor; pagination with non-deterministic searchers should return
+//   ErrNonDeterministicSearcher. Callers must use errors.Is.
+// - Ownership: returned slices are caller-owned; elements are read-only and may be shared.
+// - Determinism: Search/List methods must return stable ordering for identical inputs.
+// - Nil/zero: empty inputs are treated as no-ops; SearchPage requires limit > 0.
+// - Atomicity: batch registration is not guaranteed to be atomic on error.
 type Index interface {
 	// Registration
 	RegisterTool(tool toolmodel.Tool, backend toolmodel.ToolBackend) error
@@ -78,6 +89,12 @@ type ToolRegistration struct {
 type BackendSelector func([]toolmodel.ToolBackend) toolmodel.ToolBackend
 
 // Searcher is the interface for search implementations.
+//
+// Contract:
+// - Concurrency: implementations should be safe for concurrent use or document otherwise.
+// - Ownership: docs and summaries are read-only and must not be mutated.
+// - Determinism: identical inputs must yield stable ordering; tie-break deterministically.
+// - Nil/zero: limit <= 0 must return an empty result set with nil error.
 type Searcher interface {
 	// Search returns summaries ordered by relevance.
 	// When used with SearchPage, the ordering must be deterministic for the same
@@ -86,7 +103,10 @@ type Searcher interface {
 }
 
 // DeterministicSearcher indicates whether a searcher provides deterministic ordering.
-// Deterministic ordering is required for cursor pagination to be stable.
+//
+// Contract:
+// - Deterministic reports whether Search ordering is stable for identical inputs.
+// - Implementations must not return true if ordering is non-deterministic.
 type DeterministicSearcher interface {
 	Searcher
 	Deterministic() bool
@@ -115,11 +135,20 @@ type ChangeEvent struct {
 type ChangeListener func(ChangeEvent)
 
 // ChangeNotifier is an optional interface for receiving change events.
+//
+// Contract:
+// - OnChange must be safe for concurrent use.
+// - It must return a non-nil unsubscribe function that is safe to call multiple times.
+// - Passing a nil listener must return a no-op unsubscribe function.
 type ChangeNotifier interface {
 	OnChange(listener ChangeListener) (unsubscribe func())
 }
 
 // Refresher is an optional interface for forcing a refresh of cached search docs.
+//
+// Contract:
+// - Refresh returns a monotonic version for the search doc cache.
+// - Refresh must be safe for concurrent use.
 type Refresher interface {
 	Refresh() uint64
 }
@@ -1014,6 +1043,9 @@ type scoredResult struct {
 }
 
 func (s *lexicalSearcher) Search(query string, limit int, docs []SearchDoc) ([]Summary, error) {
+	if limit <= 0 {
+		return []Summary{}, nil
+	}
 	query = strings.ToLower(strings.TrimSpace(query))
 
 	// Empty query returns all results (up to limit)
